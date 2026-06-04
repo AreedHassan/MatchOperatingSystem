@@ -1,0 +1,6 @@
+{
+  "name": "Match Operating System",
+  "description": "A premium responsive Gully Cricket companion with custom rules, animated toss simulator, dynamic win forecasting, automatic Man of the Match awards, and vector PDF report card exports. Designed by Areed Hassan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
