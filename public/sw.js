@@ -2,7 +2,7 @@ const CACHE_NAME = 'mos-cricket-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/icon.png',
+  '/icon.jpg',
   '/manifest.json'
 ];
 

@@ -13,12 +13,8 @@ import {
   RotateCcw, 
   Settings, 
   Activity, 
-  Smartphone,
   ChevronRight,
-  Sparkles,
-  X,
-  ExternalLink,
-  Download
+  Sparkles
 } from 'lucide-react';
 import { speakText } from './utils/commentary';
 
@@ -30,7 +26,6 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showMobileInstall, setShowMobileInstall] = useState(false);
 
   // Global defaults synced to match setups
   const [globalVoiceCommentary, setGlobalVoiceCommentary] = useState(true);
@@ -231,20 +226,6 @@ export default function App() {
 
           {/* Navigation Action Buttons */}
           <div className="flex items-center gap-2.5 text-xs">
-            {/* Handset installation prompt */}
-            <button
-              onClick={() => {
-                setShowHistory(false);
-                setShowSettings(false);
-                setShowMobileInstall(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all select-none border border-lime-400/20 bg-lime-400/5 hover:bg-lime-400/10 text-lime-400 shadow-sm cursor-pointer"
-              title="Get Handset App (PWA / APK)"
-            >
-              <Smartphone size={13} />
-              <span className="hidden sm:inline font-sans">Get Handset</span>
-            </button>
-
             {/* Scorer active state indicators */}
             {match && match.status !== 'completed' && (
               <span className="hidden sm:inline-block text-lime-400 bg-lime-400/5 px-3 py-1.5 rounded-full border border-lime-400/20 font-bold font-mono uppercase tracking-wider text-[10px]">
@@ -255,7 +236,6 @@ export default function App() {
             {/* History Book Ledger Navigation */}
             <button
               onClick={() => {
-                setShowMobileInstall(false);
                 setShowHistory(!showHistory);
               }}
               className={`flex items-center gap-1.5 px-4.5 py-2.5 rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all select-none border cursor-pointer ${
@@ -622,113 +602,6 @@ export default function App() {
       <footer className="h-14 border-t border-white/[0.05] flex items-center justify-center bg-black/40 px-4 text-center text-[9px] text-white/30 font-mono uppercase tracking-widest z-10 w-full mt-auto">
         <span>Match Operating System (MOS) • Made by Areed Hassan</span>
       </footer>
-
-      {/* PWA / APK Mobile Setup Help Center Modal */}
-      <AnimatePresence>
-        {showMobileInstall && (
-          <div className="fixed inset-0 bg-[#030303]/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 15 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="glass-panel w-full max-w-lg rounded-3xl p-6 md:p-8 relative overflow-hidden border border-white/10 shadow-2xl text-white space-y-6"
-            >
-              {/* Absolutes decorative background highlights */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-lime-400/5 blur-3xl pointer-events-none" />
-
-              {/* Header Title with smartphone */}
-              <div className="flex items-start justify-between border-b border-white/10 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-lime-400/10 text-lime-400 flex items-center justify-center border border-lime-400/20">
-                    <Smartphone size={18} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black uppercase tracking-tight flex items-center gap-1.5 font-sans">
-                      Install Handset App
-                    </h2>
-                    <p className="text-[9px] text-white/45 font-mono uppercase tracking-widest mt-0.5">
-                      Gully cricket match OS on your device
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowMobileInstall(false)}
-                  className="text-white/40 hover:text-white p-2 rounded-lg bg-white/5 hover:bg-white/10 hover:rotate-90 transition-all duration-305 cursor-pointer"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              {/* Setup Methods */}
-              <div className="space-y-4 text-left">
-                
-                {/* Method 1: PWA (Progressive Web App) */}
-                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-2">
-                  <div className="flex items-center gap-2 text-lime-400 text-xs font-mono font-bold uppercase tracking-wider">
-                    <span className="w-2 h-2 rounded-full bg-lime-400 animate-ping" />
-                    Method 1: Instant PWA Install (Best & Easy)
-                  </div>
-                  <p className="text-[10px] text-white/55 leading-relaxed normal-case opacity-90 font-medium">
-                    We configured your Vercel version with Offline Cache Service Workers and high-contrast app launcher icons. You can run it fully fullscreen without browser bars like a native app!
-                  </p>
-                  <div className="text-[10px] space-y-1.5 pl-2 border-l border-lime-400/30 text-white/80 py-1 font-mono uppercase tracking-wide">
-                    <p>1. Open your Vercel URL in Chrome for Android</p>
-                    <p>2. Tap Browser Menu (3 dots) in top right</p>
-                    <p>3. Choose "Install App" or "Add to Home Screen"</p>
-                    <p>4. Back to homescreen & launch! Works offline on spotty pitches</p>
-                  </div>
-                </div>
-
-                {/* Method 2: Convert to Native APK */}
-                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl space-y-2 font-mono">
-                  <div className="flex items-center gap-2 text-lime-400 text-xs font-bold uppercase tracking-wider">
-                    <span>⚡</span>
-                    Method 2: Convert Vercel Site to native APK
-                  </div>
-                  <p className="text-[10px] text-white/55 leading-relaxed normal-case select-none">
-                    If you want a standalone Android compiled .apk file without browser setups:
-                  </p>
-                  <div className="text-[10px] text-white/80 space-y-2 pl-2 border-l border-lime-400/30 py-1">
-                    <p className="flex items-start gap-1 leading-relaxed">
-                      <span>•</span>
-                      <span>
-                        <strong>Automated Free Packer:</strong> Go to <a href="https://www.pwabuilder.com" target="_blank" rel="noreferrer" className="text-lime-400 underline font-bold hover:text-lime-300">PWABuilder.com</a> or <a href="https://www.webintoapp.com" target="_blank" rel="noreferrer" className="text-lime-400 underline font-bold hover:text-lime-300">WebIntoApp.com</a>. Paste your Vercel web URL, and their servers will generate your custom Android APK download file instantly.
-                      </span>
-                    </p>
-                    <p className="flex items-start gap-1 leading-relaxed">
-                      <span>•</span>
-                      <span>
-                        <strong>Capacitor CLI Package:</strong> Compile directly using Capacitor in your code workspace:
-                        <code className="block bg-zinc-950 border border-white/5 p-2 rounded-xl mt-1.5 text-[8.5px] font-mono leading-normal text-white/70 overflow-x-auto whitespace-pre normal-case select-all">
-                          npm install @capacitor/core @capacitor/cli<br />
-                          npx cap init "Match OS" "com.moscricket.app" --web-dir=dist<br />
-                          npm install @capacitor/android<br />
-                          npx cap add android<br />
-                          npm run build && npx cap sync
-                        </code>
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Bottom dismissal */}
-              <div className="pt-2 border-t border-white/10 flex justify-end">
-                <button
-                  onClick={() => setShowMobileInstall(false)}
-                  className="px-6 py-3 bg-white text-zinc-950 font-bold uppercase text-[10px] tracking-wider rounded-xl transition hover:bg-white/95 active:scale-95 duration-100 flex items-center gap-1.5 cursor-pointer"
-                >
-                  Confirm & Close
-                  <ChevronRight size={12} />
-                </button>
-              </div>
-
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
