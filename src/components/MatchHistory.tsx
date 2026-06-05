@@ -199,13 +199,119 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
 
   // Automated PDF Scorecard builder via jsPDF
   const handleDownloadPDF = (m: Match) => {
+    // 1. Initialize jsPDF in points (pt)
     const doc = new jsPDF({
       orientation: 'portrait',
-      unit: 'mm',
+      unit: 'pt',
       format: 'a4'
     });
 
+    const pageWidth = doc.internal.pageSize.width; // 595.28 pt
+    const pageHeight = doc.internal.pageSize.height; // 841.89 pt
+    const margin = 24;
+    const contentWidth = pageWidth - 2 * margin; // 547.28 pt
+
     const todayDateStr = new Date().toISOString().split('T')[0];
+
+    // Safe opacity controller
+    const setOpacity = (opacity: number) => {
+      try {
+        const GStateClass = (doc as any).GState || (jsPDF as any).GState;
+        if (GStateClass) {
+          doc.setGState(new GStateClass({ opacity }));
+        }
+      } catch (e) {
+        // fallback
+      }
+    };
+
+    // Helper to blend backgrounds for standard shapes
+    const drawPageBackground = () => {
+      doc.setFillColor(248, 249, 252);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    };
+
+    // Helper to draw glass card with correct stacking layers
+    const drawGlassCard = (x: number, y: number, w: number, h: number, accentColor: [number, number, number]) => {
+      const r = 18; // Corner radius 16-20pt minimum
+      
+      // 1. Drop shadow Layer 1 (7% opacity, 3pt right, 5pt down)
+      doc.setFillColor(180, 185, 200);
+      setOpacity(0.07);
+      doc.roundedRect(x + 3, y + 5, w, h, r, r, 'F');
+      
+      // Drop shadow Layer 2 (12% opacity, 2pt right, 3pt down)
+      setOpacity(0.12);
+      doc.roundedRect(x + 2, y + 3, w, h, r, r, 'F');
+      
+      // 2. Frosted base (white fill at 70% opacity)
+      doc.setFillColor(255, 255, 255);
+      setOpacity(0.70);
+      doc.roundedRect(x, y, w, h, r, r, 'F');
+      
+      // 3. Color tint overlay (soft wash of accent color at 12% opacity)
+      doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+      setOpacity(0.12);
+      doc.roundedRect(x, y, w, h, r, r, 'F');
+      
+      // 4. Inner highlight shimmer (thin bright white strip 3.5pt tall at top inner edge, 80% opacity)
+      doc.setFillColor(255, 255, 255);
+      setOpacity(0.80);
+      doc.roundedRect(x + 2, y + 1.5, w - 4, 3.5, 3, 3, 'F');
+      
+      // 5. Border stroke (0.8pt rounded stroke of accent color at 24% opacity)
+      doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+      doc.setLineWidth(0.8);
+      setOpacity(0.24);
+      doc.roundedRect(x, y, w, h, r, r, 'S');
+      
+      // Accent stripe (At the top inside edge of every card, render a thin rounded strip 5.5pt tall in card's accent color at 32% opacity)
+      doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+      setOpacity(0.32);
+      doc.roundedRect(x + 18, y + 6, w - 36, 5.5, 2, 2, 'F');
+      
+      // Clean reset
+      setOpacity(1.0);
+    };
+
+    // Helper to draw pill
+    const drawPill = (
+      text: string,
+      x: number,
+      y: number,
+      accentColor: [number, number, number],
+      fontSize: number = 6.5,
+      isBold: boolean = true
+    ) => {
+      doc.setFont("Helvetica", isBold ? "bold" : "normal");
+      doc.setFontSize(fontSize);
+      const textW = doc.getTextWidth(text);
+      const h = fontSize + 6.5; // height of pill
+      const w = textW + 16;     // width with horizontal padding
+      
+      // White Base 70%
+      doc.setFillColor(255, 255, 255);
+      setOpacity(0.70);
+      doc.roundedRect(x, y, w, h, h/2, h/2, 'F');
+      
+      // Color Overlay 12%
+      doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+      setOpacity(0.12);
+      doc.roundedRect(x, y, w, h, h/2, h/2, 'F');
+      
+      // Soft border stroke 24%
+      doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
+      doc.setLineWidth(0.8);
+      setOpacity(0.24);
+      doc.roundedRect(x, y, w, h, h/2, h/2, 'S');
+      
+      // Text centered vertically
+      doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+      setOpacity(1.0);
+      doc.text(text, x + 8, y + h/2 + fontSize/2 - 0.5);
+      
+      return w;
+    };
 
     // Helper to format dismissal text
     const getDismissalText = (b: Player, bowlersList: any[]) => {
@@ -239,115 +345,188 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       }
     };
 
-    // ==========================================
-    // PAGE 1: Header, Verdict, MOM, 1st Innings
-    // ==========================================
+    // Helper to draw dismissal capsules
+    const drawDismissalPill = (pdfDoc: any, text: string, px: number, py: number, pw: number, ph: number) => {
+      let color: [number, number, number] = [120, 125, 145]; // default gray
+      if (text === "NOT OUT") {
+        color = [40, 190, 120]; // Green
+      } else if (text !== "DID NOT BAT" && text !== "") {
+        color = [255, 85, 100]; // Red
+      }
+      
+      // Draw white base 70%
+      pdfDoc.setFillColor(255, 255, 255);
+      setOpacity(0.70);
+      pdfDoc.roundedRect(px, py, pw, ph, ph/2, ph/2, 'F');
+      
+      // Draw color overlay 12%
+      pdfDoc.setFillColor(color[0], color[1], color[2]);
+      setOpacity(0.12);
+      pdfDoc.roundedRect(px, py, pw, ph, ph/2, ph/2, 'F');
+      
+      // Stroke border 24%
+      pdfDoc.setDrawColor(color[0], color[1], color[2]);
+      pdfDoc.setLineWidth(0.6);
+      setOpacity(0.24);
+      pdfDoc.roundedRect(px, py, pw, ph, ph/2, ph/2, 'S');
+      
+      // Text
+      pdfDoc.setTextColor(color[0], color[1], color[2]);
+      pdfDoc.setFont("Helvetica-Bold", "normal");
+      pdfDoc.setFontSize(5.5);
+      setOpacity(1.0);
+      pdfDoc.text(text, px + pw/2, py + ph/2 + 2, { align: 'center' });
+    };
 
-    // 1. Header Box rounded rectangle (Blue themed)
-    doc.setDrawColor(79, 112, 246);
-    doc.setLineWidth(0.6);
-    doc.roundedRect(12, 12, 186, 36, 4, 4, 'S');
+    // Helper to draw page footer
+    const drawFooter = (pdfDoc: any, pageNum: number, totalPages: number) => {
+      const y_footer = 815; // standard footer y for A4 in points
+      
+      // Thin 0.4pt horizontal rule in [200, 205, 225] at 40% opacity
+      pdfDoc.setDrawColor(200, 205, 225);
+      pdfDoc.setLineWidth(0.4);
+      setOpacity(0.40);
+      pdfDoc.line(margin, y_footer - 10, pageWidth - margin, y_footer - 10);
+      
+      // Left and Right text
+      setOpacity(1.0);
+      pdfDoc.setFont("Helvetica", "normal");
+      pdfDoc.setFontSize(6.5);
+      pdfDoc.setTextColor(150, 155, 178); // muted gray
+      
+      pdfDoc.text("Match Operating System (MOS) · Designed by Areed Hassan", margin, y_footer);
+      
+      const genDateStr = `Generated ${todayDateStr} · Page ${pageNum} of ${totalPages}`;
+      pdfDoc.text(genDateStr, pageWidth - margin, y_footer, { align: 'right' });
+    };
 
-    // "MATCH OPERATING SYSTEM" tag inside Header Box
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(18, 17, 39, 5, 1.5, 1.5, 'F');
+    // Draw background on Page 1 first
+    drawPageBackground();
+
+    let curY = 24; // starting top padding
+    let currentPage = 1;
+
+    // ==========================================
+    // CARD 1: HEADER (Accent: [99, 118, 255])
+    // ==========================================
+    const headerHeight = 115;
+    drawGlassCard(margin, curY, contentWidth, headerHeight, [99, 118, 255]);
+    
+    // Top-left frosted chill pill
+    drawPill("MATCH OPERATING SYSTEM", margin + 18, curY + 15, [99, 118, 255], 6.5, true);
+    
+    // Top-right overs pill
+    const oversText = `${m.settings.oversPerMatch.toFixed(1)} OVERS`;
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(59, 130, 246);
-    doc.text("MATCH OPERATING SYSTEM", 19.5, 20.3);
-
-    // "10.0 OVERS" tag inside Header Box
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(164, 17, 28, 5, 1.5, 1.5, 'F');
-    doc.setTextColor(59, 130, 246);
     doc.setFontSize(7);
-    doc.text(`${m.settings.oversPerMatch.toFixed(1)} OVERS`, 178, 20.2, { align: 'center' });
-
-    // Team A vs Team B text inside Header Box
-    doc.setFontSize(20);
-    doc.setFont("Helvetica", "bold");
-    doc.setTextColor(15, 23, 42);
-    doc.text(`${m.teamA.name.toUpperCase()}  vs  ${m.teamB.name.toUpperCase()}`, 18, 29);
-
-    // Scores comparison line
-    doc.setFontSize(13);
-    doc.setTextColor(79, 112, 246);
-    doc.text(`${m.teamA.name.toUpperCase()} ${m.firstInnings.runs}/${m.firstInnings.wickets}`, 18, 36);
-    doc.setTextColor(156, 163, 175);
-    const separatorOffset = 18 + doc.getTextWidth(`${m.teamA.name.toUpperCase()} ${m.firstInnings.runs}/${m.firstInnings.wickets}`);
-    doc.text("  /  ", separatorOffset, 36);
-    if (m.secondInnings) {
-      doc.setTextColor(244, 63, 94);
-      doc.text(
-        `${m.teamB.name.toUpperCase()} ${m.secondInnings.runs}/${m.secondInnings.wickets}`,
-        separatorOffset + doc.getTextWidth("  /  "),
-        36
-      );
-    } else {
-      doc.setTextColor(156, 163, 175);
-      doc.text(`${m.teamB.name.toUpperCase()} DNB`, separatorOffset + doc.getTextWidth("  /  "), 36);
-    }
-
-    // Date & Match ID line in Header Box
+    const oversTextW = doc.getTextWidth(oversText);
+    const oversPillW = oversTextW + 16;
+    drawPill(oversText, margin + contentWidth - 18 - oversPillW, curY + 15, [99, 118, 255], 7, true);
+    
+    // Team Names (STREET KINGS vs GULLY GODS)
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(18);
+    doc.setTextColor(20, 22, 40);
+    const teamNamesStr = `${m.teamA.name.toUpperCase()}  vs  ${m.teamB.name.toUpperCase()}`;
+    doc.text(teamNamesStr, margin + 18, curY + 44);
+    
+    // Scores line list
+    const scoreTextA = `${m.teamA.name.toUpperCase()} ${m.firstInnings.runs}/${m.firstInnings.wickets}`;
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(13.5);
+    doc.setTextColor(99, 118, 255);
+    doc.text(scoreTextA, margin + 18, curY + 66);
+    
+    // Slash separator in muted gray
+    const widthA = doc.getTextWidth(scoreTextA);
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setTextColor(150, 155, 178);
+    doc.text("  /  ", margin + 18 + widthA, curY + 66);
+    
+    const widthSlash = doc.getTextWidth("  /  ");
+    const scoreTextB = m.secondInnings ? `${m.teamB.name.toUpperCase()} ${m.secondInnings.runs}/${m.secondInnings.wickets}` : "DNB";
+    doc.setTextColor(255, 85, 100);
+    doc.text(scoreTextB, margin + 18 + widthA + widthSlash, curY + 66);
+    
+    // Match date & ID
+    doc.setFont("Helvetica-Bold", "normal");
     doc.setFontSize(7.5);
-    doc.setFont("Helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text(`DATE: ${new Date(m.date).toISOString().split('T')[0]}   ·   MATCH ID: ${m.id}`, 18, 43);
+    doc.setTextColor(80, 88, 112);
+    const matchDetailsStr = `DATE: ${todayDateStr}   ·   MATCH ID: ${m.id.toUpperCase()}`;
+    doc.text(matchDetailsStr, margin + 18, curY + 84);
+    
+    curY += headerHeight + 11; // Gap between cards = 11pt
 
-    // 2. Verdict Ribbon (Green themed)
-    doc.setDrawColor(16, 185, 129);
-    doc.setFillColor(236, 253, 245);
-    doc.roundedRect(12, 51, 186, 11, 2, 2, 'FD');
-
-    // Left thick accent line
-    doc.setFillColor(16, 185, 129);
-    doc.rect(14, 53, 1.2, 7, 'F');
-
+    // ==========================================
+    // CARD 2: RESULT BANNER (Accent: [40, 190, 120])
+    // ==========================================
+    const resultHeight = 42;
+    drawGlassCard(margin, curY, contentWidth, resultHeight, [40, 190, 120]);
+    
+    // Thick 6.5pt vertical accent bar
+    doc.setFillColor(40, 190, 120);
+    doc.roundedRect(margin + 12, curY + 11, 6.5, resultHeight - 22, 1.5, 1.5, 'F');
+    
+    // Winner text + margin
     const winnerName = m.winnerTeamId === 'tie'
       ? 'Match Tied'
       : m.winnerTeamId === 'team_a' ? m.teamA.name : m.teamB.name;
-    const finalVerdict = m.winnerTeamId === 'tie' ? 'MATCH TIED' : `${winnerName} WIN`;
-
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text(finalVerdict.toUpperCase(), 18, 58.5);
-
+    const finalVerdict = m.winnerTeamId === 'tie' ? 'MATCH TIED' : `${winnerName.toUpperCase()} WIN`;
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(20, 22, 40);
+    doc.text(finalVerdict, margin + 25, curY + 25);
+    
+    const finalVerdictWidth = doc.getTextWidth(finalVerdict);
     doc.setFont("Helvetica", "normal");
-    doc.setTextColor(71, 85, 105);
-    const marginOffset = 18 + doc.getTextWidth(finalVerdict.toUpperCase());
-    doc.text(m.winnerTeamId === 'tie' ? ' after standard play' : ` by ${m.winMarginText}`, marginOffset, 58.5);
+    doc.setFontSize(9);
+    doc.setTextColor(80, 88, 112);
+    const marginText = m.winnerTeamId === 'tie' ? ' after standard play' : ` by ${m.winMarginText}`;
+    doc.text(marginText, margin + 25 + finalVerdictWidth + 2, curY + 25);
+    
+    // MATCH COMPLETE pill (right aligned)
+    const matchCompletePillW = doc.getTextWidth("MATCH COMPLETE") + 16;
+    drawPill("MATCH COMPLETE", margin + contentWidth - 18 - matchCompletePillW, curY + 14.5, [40, 190, 120], 6.5, true);
+    
+    curY += resultHeight + 11; // Gap = 11pt
 
-    // Right side tag "MATCH COMPLETE"
-    doc.setFillColor(209, 250, 229);
-    doc.roundedRect(162, 54.2, 30, 4.6, 1, 1, 'F');
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(5, 150, 105);
-    doc.text("MATCH COMPLETE", 177, 57.5, { align: 'center' });
-
-    // 3. Man of the Match Box (Orange themed)
-    const mom = getManOfTheMatch(m);
-    doc.setDrawColor(245, 158, 11);
-    doc.setFillColor(254, 243, 199);
-    doc.roundedRect(12, 65, 186, 29, 3, 3, 'FD');
-
-    doc.setFont("Helvetica", "bold");
+    // ==========================================
+    // CARD 3: MAN OF THE MATCH (Accent: [230, 160, 40])
+    // ==========================================
+    const momHeight = 93;
+    drawGlassCard(margin, curY, contentWidth, momHeight, [230, 160, 40]);
+    
+    // Label "MAN OF THE MATCH"
+    doc.setFont("Helvetica-Bold", "normal");
     doc.setFontSize(7);
-    doc.setTextColor(217, 119, 6);
-    doc.text("MAN OF THE MATCH", 18, 70);
-
-    doc.setFontSize(14);
-    doc.setTextColor(15, 23, 42);
-    doc.text(mom ? mom.player.name.toUpperCase() : "N/A", 18, 75.5);
-
+    doc.setTextColor(230, 160, 40);
+    doc.text("MAN OF THE MATCH", margin + 18, curY + 17);
+    
+    // Player Name
+    const mom = getManOfTheMatch(m);
+    const momPlayerName = mom ? mom.player.name.toUpperCase() : "N/A";
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(16);
+    doc.setTextColor(20, 22, 40);
+    doc.text(momPlayerName, margin + 18, curY + 33);
+    
+    // Team Name
+    const momTeamName = mom ? mom.team.name.toUpperCase() : "";
+    doc.setFont("Helvetica-Bold", "normal");
     doc.setFontSize(7.5);
-    doc.setFont("Helvetica", "bold");
-    doc.setTextColor(100, 116, 139);
-    doc.text(mom ? mom.team.name.toUpperCase() : "", 18, 79);
-
+    doc.setTextColor(150, 155, 178);
+    doc.text(momTeamName, margin + 18, curY + 42);
+    
+    // Thin separator rule
+    doc.setDrawColor(230, 160, 40);
+    doc.setLineWidth(0.4);
+    setOpacity(0.15);
+    doc.line(margin + 18, curY + 48, margin + contentWidth - 18, curY + 48);
+    setOpacity(1.0);
+    
+    // Row of 7 frosted stat boxes
     if (mom) {
-      // Draw 7 small stats rounded rectangles underneath
       const statsList = [
         { val: mom.player.runsScored.toString(), lbl: "RUNS" },
         { val: mom.player.ballsFaced.toString(), lbl: "BALLS" },
@@ -357,374 +536,480 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
         { val: mom.player.wickets.toString(), lbl: "WKTS" },
         { val: Math.round(mom.points).toString(), lbl: "PTS" }
       ];
-
-      const startX = 18;
-      const cardW = 23;
-      const spacing = 1.35;
+      
+      const cardW = 67.89; // Calculated boxWidth
+      const spacing = 6;
+      const startX = margin + 18;
+      
       statsList.forEach((stat, i) => {
-        const cx = startX + i * (cardW + spacing);
-        const cy = 80.5;
-        doc.setDrawColor(251, 191, 36);
-        doc.setFillColor(254, 252, 232);
-        doc.roundedRect(cx, cy, cardW, 11, 1.5, 1.5, 'FD');
-
-        // Number
-        doc.setFont("Helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(217, 119, 6);
-        doc.text(stat.val, cx + cardW / 2, cy + 5, { align: 'center' });
-
-        // Label
-        doc.setFont("Helvetica", "bold");
+        const bx = startX + i * (cardW + spacing);
+        const by = curY + 54;
+        const bw = cardW;
+        const bh = 28;
+        const br = 6;
+        
+        // 1. Drop shadow (1pt offset, color at 7%)
+        doc.setFillColor(180, 185, 200);
+        setOpacity(0.07);
+        doc.roundedRect(bx + 1, by + 1, bw, bh, br, br, 'F');
+        
+        // 2. White base (70% opacity)
+        doc.setFillColor(255, 255, 255);
+        setOpacity(0.70);
+        doc.roundedRect(bx, by, bw, bh, br, br, 'F');
+        
+        // 3. Gold Tint overlay (10% opacity)
+        doc.setFillColor(230, 160, 40);
+        setOpacity(0.10);
+        doc.roundedRect(bx, by, bw, bh, br, br, 'F');
+        
+        // 4. White highlight shimmer (80% opacity)
+        doc.setFillColor(255, 255, 255);
+        setOpacity(0.80);
+        doc.roundedRect(bx + 1, by + 1, bw - 2, 2, 1, 1, 'F');
+        
+        // 5. Border stroke (24% opacity)
+        doc.setDrawColor(230, 160, 40);
+        doc.setLineWidth(0.6);
+        setOpacity(0.24);
+        doc.roundedRect(bx, by, bw, bh, br, br, 'S');
+        
+        // Text 1: Value
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFontSize(10.5);
+        doc.setTextColor(230, 160, 40);
+        setOpacity(1.0);
+        doc.text(stat.val, bx + bw / 2, by + 14, { align: 'center' });
+        
+        // Text 2: Label
+        doc.setFont("Helvetica-Bold", "normal");
         doc.setFontSize(5.5);
-        doc.setTextColor(217, 119, 6);
-        doc.text(stat.lbl, cx + cardW / 2, cy + 9.2, { align: 'center' });
+        doc.setTextColor(230, 160, 40);
+        doc.text(stat.lbl, bx + bw / 2, by + 23, { align: 'center' });
       });
     }
-
-    // 4. 1st Innings Box (Blue theme)
-    doc.setDrawColor(79, 112, 246);
-    doc.setLineWidth(0.6);
-    doc.roundedRect(12, 97, 186, 185, 4, 4, 'S');
-
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(79, 112, 246);
-    doc.text("1ST INNINGS", 18, 103);
-
-    doc.setFontSize(15);
-    doc.setTextColor(15, 23, 42);
-    doc.text(m.teamA.name.toUpperCase(), 18, 110);
-
-    // Score Badge
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(156, 102, 36, 7.5, 2, 2, 'F');
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(30, 58, 138);
-    const scoreStrTeamA = `${m.firstInnings.runs} / ${m.firstInnings.wickets}  (${(m.firstInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1)})`;
-    doc.text(scoreStrTeamA, 174, 106.8, { align: 'center' });
-
-    // Batting sub-badge
-    doc.setFillColor(219, 234, 254);
-    doc.roundedRect(18, 114, 18, 4.5, 1, 1, 'F');
-    doc.setTextColor(30, 64, 175);
-    doc.setFontSize(6.5);
-    doc.text("BATTING", 27, 117.2, { align: 'center' });
-
-    // Batting table headers
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("BATTER", 18, 124.5);
-    doc.text("DISMISSAL", 56, 124.5);
-    doc.text("R", 124, 124.5, { align: 'right' });
-    doc.text("B", 139, 124.5, { align: 'right' });
-    doc.text("4s", 154, 124.5, { align: 'right' });
-    doc.text("6s", 169, 124.5, { align: 'right' });
-    doc.text("SR", 189, 124.5, { align: 'right' });
-
-    // Render Batting rows
-    let curY = 130.5;
-    const listBattersA = m.firstInnings.batsmen;
-    listBattersA.forEach((b) => {
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(b.name, 18, curY);
-
-      const disText = getDismissalText(b, m.firstInnings.bowlers);
-      let pillBg = "#f4f4f5";
-      let pillBorder = "#e4e4e7";
-      let pillText = "#71717a";
-      
-      if (disText === "NOT OUT") {
-        pillBg = "#ecfdf5";
-        pillBorder = "#a7f3d0";
-        pillText = "#059669";
-      } else if (disText !== "DID NOT BAT") {
-        pillBg = "#fff1f2";
-        pillBorder = "#fecdd3";
-        pillText = "#e11d48";
-      }
-
-      doc.setFillColor(pillBg);
-      doc.setDrawColor(pillBorder);
-      doc.setLineWidth(0.25);
-      doc.roundedRect(56, curY - 3.8, 42, 5, 2.5, 2.5, 'FD');
-
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(5.5);
-      doc.setTextColor(pillText);
-      doc.text(disText, 77, curY - 0.4, { align: 'center' });
-
-      const srStr = b.ballsFaced > 0 ? ((b.runsScored / b.ballsFaced) * 100).toFixed(1) : "0.0";
-      
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(b.runsScored.toString(), 124, curY, { align: 'right' });
-      
-      doc.setFont("Helvetica", "normal");
-      doc.text(b.ballsFaced.toString(), 139, curY, { align: 'right' });
-      doc.text(b.fours.toString(), 154, curY, { align: 'right' });
-      
-      doc.setTextColor(249, 115, 22);
-      doc.setFont("Helvetica", "bold");
-      doc.text(b.sixes.toString(), 169, curY, { align: 'right' });
-      
-      doc.setTextColor(59, 130, 246);
-      doc.text(srStr, 189, curY, { align: 'right' });
-
-      curY += 6.8;
-    });
-
-    // Total Row
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(18, 172, 174, 6.5, 1.5, 1.5, 'F');
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(30, 58, 138);
-    doc.text("TOTAL", 22, 176.3);
-
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(71, 85, 105);
-    doc.text(`overs: ${(m.firstInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1)} / ${m.settings.oversPerMatch}`, 45, 176.3);
-
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(30, 58, 138);
-    doc.text(`${m.firstInnings.runs}/${m.firstInnings.wickets}`, 189, 176.3, { align: 'right' });
-
-    // Bowling section
-    doc.setFillColor(219, 234, 254);
-    doc.roundedRect(18, 183.5, 18, 4.5, 1, 1, 'F');
-    doc.setTextColor(30, 64, 175);
-    doc.setFontSize(6.5);
-    doc.text("BOWLING", 27, 186.7, { align: 'center' });
-
-    // Bowling table headers
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("BOWLER", 18, 194);
-    doc.text("O", 124, 194, { align: 'right' });
-    doc.text("R", 139, 194, { align: 'right' });
-    doc.text("W", 154, 194, { align: 'right' });
-    doc.text("MDNS", 169, 194, { align: 'right' });
-    doc.text("ECON", 189, 194, { align: 'right' });
-
-    // Render bowling rows
-    curY = 200;
-    const bowlersListA = m.firstInnings.bowlers;
-    bowlersListA.forEach((bw) => {
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(bw.name, 18, curY);
-
-      const econStr = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled).toFixed(1) : "0.0";
-
-      doc.setFont("Helvetica", "normal");
-      doc.text(bw.oversBowled.toString(), 124, curY, { align: 'right' });
-      doc.text(bw.runsConceded.toString(), 139, curY, { align: 'right' });
-      
-      doc.setFont("Helvetica", "bold");
-      if (bw.wickets > 0) doc.setTextColor(59, 130, 246); else doc.setTextColor(15, 23, 42);
-      doc.text(bw.wickets.toString(), 154, curY, { align: 'right' });
-      
-      doc.setFont("Helvetica", "normal");
-      doc.setTextColor(15, 23, 42);
-      doc.text(bw.maidens.toString(), 169, curY, { align: 'right' });
-      doc.text(econStr, 189, curY, { align: 'right' });
-
-      curY += 6.8;
-    });
-
-    // Page 1 Footer
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(148, 163, 184);
-    doc.text("Match Operating System (MOS) · Designed by Areed Hassan", 12, 289);
-    doc.text(`Generated ${todayDateStr} · Page 1 of 2`, 198, 289, { align: 'right' });
-
-
-    // ==========================================
-    // PAGE 2: 2nd Innings Scorecard (Red theme)
-    // ==========================================
-    doc.addPage();
-
-    // Red theme border around page 2 content
-    doc.setDrawColor(244, 63, 94);
-    doc.setLineWidth(0.6);
-    doc.roundedRect(12, 12, 186, 270, 4, 4, 'S');
-
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(244, 63, 94);
-    doc.text("2ND INNINGS", 18, 18);
-
-    doc.setFontSize(15);
-    doc.setTextColor(15, 23, 42);
-    doc.text(m.teamB.name.toUpperCase(), 18, 25);
-
-    // Score Badge for Team B
-    doc.setFillColor(254, 226, 226);
-    doc.roundedRect(156, 17, 36, 7.5, 2, 2, 'F');
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(153, 27, 27);
-    const runsB = m.secondInnings ? m.secondInnings.runs : 0;
-    const wicketsB = m.secondInnings ? m.secondInnings.wickets : 0;
-    const oversB = m.secondInnings ? (m.secondInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1) : "0.0";
-    const scoreStrTeamB = `${runsB} / ${wicketsB}  (${oversB})`;
-    doc.text(scoreStrTeamB, 174, 21.8, { align: 'center' });
-
-    // Batting sub-badge
-    doc.setFillColor(254, 226, 226);
-    doc.roundedRect(18, 29.5, 18, 4.5, 1, 1, 'F');
-    doc.setTextColor(185, 28, 28);
-    doc.setFontSize(6.5);
-    doc.text("BATTING", 27, 32.7, { align: 'center' });
-
-    // Table headers for 2nd innings
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("BATTER", 18, 40);
-    doc.text("DISMISSAL", 56, 40);
-    doc.text("R", 124, 40, { align: 'right' });
-    doc.text("B", 139, 40, { align: 'right' });
-    doc.text("4s", 154, 40, { align: 'right' });
-    doc.text("6s", 169, 40, { align: 'right' });
-    doc.text("SR", 189, 40, { align: 'right' });
-
-    // Render Batting rows for Team B
-    curY = 46;
-    const listBattersB = m.secondInnings ? m.secondInnings.batsmen : [];
-    const bowlersListB = m.secondInnings ? m.secondInnings.bowlers : [];
     
-    listBattersB.forEach((b) => {
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(b.name, 18, curY);
+    curY += momHeight + 11; // Gap = 11pt
 
-      const disText = getDismissalText(b, bowlersListB);
-      let pillBg = "#f4f4f5";
-      let pillBorder = "#e4e4e7";
-      let pillText = "#71717a";
-      
-      if (disText === "NOT OUT") {
-        pillBg = "#ecfdf5";
-        pillBorder = "#a7f3d0";
-        pillText = "#059669";
-      } else if (disText !== "DID NOT BAT") {
-        pillBg = "#fff1f2";
-        pillBorder = "#fecdd3";
-        pillText = "#e11d48";
+    // ==========================================
+    // CARD 4: TEAM A INNINGS (Accent: [99, 118, 255])
+    // ==========================================
+    const activeBowlersA = m.firstInnings.bowlers.filter(bw => bw.oversBowled > 0);
+    const height4 = 14 + 22 + 22 + 17 + (m.firstInnings.batsmen.length * 21) + 21 + 6 + 22 + 17 + (activeBowlersA.length * 21) + 14;
+    
+    // Draw Glass Card
+    drawGlassCard(margin, curY, contentWidth, height4, [99, 118, 255]);
+    
+    let innerY = curY + 14; // Start at top padding Y
+    
+    // 1. Innings Header Area (Innings Label + Team Name + Score Badge)
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(99, 118, 255);
+    doc.text("1ST INNINGS", margin + 18, innerY + 5);
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(15);
+    doc.setTextColor(20, 22, 40);
+    doc.text(m.teamA.name.toUpperCase(), margin + 18, innerY + 17);
+    
+    // Score Badge Pill (right aligned)
+    const scoreStrTeamA = `${m.firstInnings.runs}/${m.firstInnings.wickets}  (${(m.firstInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1)})`;
+    const scorePillW = doc.getTextWidth(scoreStrTeamA) + 18;
+    drawPill(scoreStrTeamA, margin + contentWidth - 18 - scorePillW, innerY + 4, [99, 118, 255], 8.5, true);
+    
+    innerY += 22; // increment header
+    
+    // 2. Batting Sub-badge
+    drawPill("BATTING", margin + 18, innerY + 2.5, [99, 118, 255], 6.5, true);
+    innerY += 22; // increment batting label
+    
+    // 3. Table Headers
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(99, 118, 255);
+    setOpacity(0.85);
+    doc.text("BATTER", margin + 18, innerY + 12);
+    doc.text("DISMISSAL", margin + 145, innerY + 12);
+    doc.text("R", margin + 340, innerY + 12, { align: 'right' });
+    doc.text("B", margin + 380, innerY + 12, { align: 'right' });
+    doc.text("4s", margin + 420, innerY + 12, { align: 'right' });
+    doc.text("6s", margin + 460, innerY + 12, { align: 'right' });
+    doc.text("SR", margin + contentWidth - 18, innerY + 12, { align: 'right' });
+    setOpacity(1.0);
+    
+    innerY += 17; // increment table header
+    
+    // 4. Render Batting rows
+    m.firstInnings.batsmen.forEach((b, idx) => {
+      // Alternating rows zebra pattern background
+      if (idx % 2 === 0) {
+        doc.setFillColor(180, 185, 200);
+        setOpacity(0.05);
+        doc.roundedRect(margin + 10, innerY, contentWidth - 20, 21, 4, 4, 'F');
+        setOpacity(1.0);
       }
-
-      doc.setFillColor(pillBg);
-      doc.setDrawColor(pillBorder);
-      doc.setLineWidth(0.25);
-      doc.roundedRect(56, curY - 3.8, 42, 5, 2.5, 2.5, 'FD');
-
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(5.5);
-      doc.setTextColor(pillText);
-      doc.text(disText, 77, curY - 0.4, { align: 'center' });
-
-      const srStr = b.ballsFaced > 0 ? ((b.runsScored / b.ballsFaced) * 100).toFixed(1) : "0.0";
       
-      doc.setFont("Helvetica", "bold");
+      // Batter Name
+      doc.setFont("Helvetica-Bold", "normal");
       doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(b.runsScored.toString(), 124, curY, { align: 'right' });
+      doc.setTextColor(20, 22, 40);
+      doc.text(b.name, margin + 18, innerY + 13.5);
+      
+      // Dismissal Pill
+      const disText = getDismissalText(b, m.firstInnings.bowlers);
+      drawDismissalPill(doc, disText, margin + 145, innerY + 5.5, 95, 10);
+      
+      // Values
+      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(20, 22, 40);
+      doc.text(b.runsScored.toString(), margin + 340, innerY + 13.5, { align: 'right' });
       
       doc.setFont("Helvetica", "normal");
-      doc.text(b.ballsFaced.toString(), 139, curY, { align: 'right' });
-      doc.text(b.fours.toString(), 154, curY, { align: 'right' });
+      doc.setTextColor(80, 88, 112);
+      doc.text(b.ballsFaced.toString(), margin + 380, innerY + 13.5, { align: 'right' });
+      doc.text(b.fours.toString(), margin + 420, innerY + 13.5, { align: 'right' });
       
-      doc.setTextColor(249, 115, 22);
-      doc.setFont("Helvetica", "bold");
-      doc.text(b.sixes.toString(), 169, curY, { align: 'right' });
+      // Gold highlight for 6s > 0
+      if (b.sixes > 0) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(230, 160, 40); // gold
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(20, 22, 40);
+      }
+      doc.text(b.sixes.toString(), margin + 460, innerY + 13.5, { align: 'right' });
       
-      doc.setTextColor(244, 63, 94);
-      doc.text(srStr, 189, curY, { align: 'right' });
-
-      curY += 6.8;
+      // SR formatting
+      const srVal = b.ballsFaced > 0 ? (b.runsScored / b.ballsFaced) * 100 : 0;
+      const srStr = srVal.toFixed(1);
+      if (srVal > 150) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(99, 118, 255); // accent color
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(80, 88, 112);
+      }
+      doc.text(srStr, margin + contentWidth - 18, innerY + 13.5, { align: 'right' });
+      
+      innerY += 21;
     });
-
-    // Total Row Team B
-    doc.setFillColor(254, 242, 242);
-    doc.roundedRect(18, 87, 174, 6.5, 1.5, 1.5, 'F');
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(153, 27, 27);
-    doc.text("TOTAL", 22, 91.3);
-
+    
+    // 5. Total Row
+    doc.setFillColor(99, 118, 255);
+    setOpacity(0.08);
+    doc.roundedRect(margin + 10, innerY, contentWidth - 20, 21, 4, 4, 'F');
+    setOpacity(1.0);
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(20, 22, 40);
+    doc.text("TOTAL", margin + 18, innerY + 13.5);
+    
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(7.5);
-    doc.setTextColor(71, 85, 105);
-    doc.text(`overs: ${oversB} / ${m.settings.oversPerMatch}`, 45, 91.3);
-
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(153, 27, 27);
-    doc.text(`${runsB}/${wicketsB}`, 189, 91.3, { align: 'right' });
-
-    // Bowling section
-    doc.setFillColor(254, 226, 226);
-    doc.roundedRect(18, 98.5, 18, 4.5, 1, 1, 'F');
-    doc.setTextColor(185, 28, 28);
-    doc.setFontSize(6.5);
-    doc.text("BOWLING", 27, 101.7, { align: 'center' });
-
-    // Bowling table headers
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("BOWLER", 18, 109);
-    doc.text("O", 124, 109, { align: 'right' });
-    doc.text("R", 139, 109, { align: 'right' });
-    doc.text("W", 154, 109, { align: 'right' });
-    doc.text("MDNS", 169, 109, { align: 'right' });
-    doc.text("ECON", 189, 109, { align: 'right' });
-
-    // Render bowling rows for Team B
-    curY = 115;
-    bowlersListB.forEach((bw) => {
-      doc.setFont("Helvetica", "bold");
+    doc.setTextColor(80, 88, 112);
+    const oversTextA = `overs: ${(m.firstInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1)} / ${m.settings.oversPerMatch}`;
+    doc.text(oversTextA, margin + 65, innerY + 13);
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(20, 22, 40);
+    const totScoreStrA = `${m.firstInnings.runs}/${m.firstInnings.wickets}`;
+    doc.text(totScoreStrA, margin + contentWidth - 18, innerY + 14, { align: 'right' });
+    
+    innerY += 21 + 6; // increment total row + offset
+    
+    // 6. Bowling Section Header Label
+    drawPill("BOWLING", margin + 18, innerY + 2.5, [99, 118, 255], 6.5, true);
+    innerY += 22;
+    
+    // 7. Bowling Table Headers
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(99, 118, 255);
+    setOpacity(0.85);
+    doc.text("BOWLER", margin + 18, innerY + 12);
+    doc.text("O", margin + 340, innerY + 12, { align: 'right' });
+    doc.text("R", margin + 380, innerY + 12, { align: 'right' });
+    doc.text("W", margin + 420, innerY + 12, { align: 'right' });
+    doc.text("MDNS", margin + 460, innerY + 12, { align: 'right' });
+    doc.text("ECON", margin + contentWidth - 18, innerY + 12, { align: 'right' });
+    setOpacity(1.0);
+    
+    innerY += 17;
+    
+    // 8. Render Bowling rows
+    activeBowlersA.forEach((bw, idx) => {
+      if (idx % 2 === 0) {
+        doc.setFillColor(180, 185, 200);
+        setOpacity(0.05);
+        doc.roundedRect(margin + 10, innerY, contentWidth - 20, 21, 4, 4, 'F');
+        setOpacity(1.0);
+      }
+      
+      // Bowler Name
+      doc.setFont("Helvetica-Bold", "normal");
       doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(bw.name, 18, curY);
-
-      const econStr = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled).toFixed(1) : "0.0";
-
-      doc.setFont("Helvetica", "normal");
-      doc.text(bw.oversBowled.toString(), 124, curY, { align: 'right' });
-      doc.text(bw.runsConceded.toString(), 139, curY, { align: 'right' });
+      doc.setTextColor(20, 22, 40);
+      doc.text(bw.name, margin + 18, innerY + 13.5);
       
-      doc.setFont("Helvetica", "bold");
-      if (bw.wickets > 0) doc.setTextColor(244, 63, 94); else doc.setTextColor(15, 23, 42);
-      doc.text(bw.wickets.toString(), 154, curY, { align: 'right' });
-      
+      // Standard metrics
       doc.setFont("Helvetica", "normal");
-      doc.setTextColor(15, 23, 42);
-      doc.text(bw.maidens.toString(), 169, curY, { align: 'right' });
-      doc.text(econStr, 189, curY, { align: 'right' });
-
-      curY += 6.8;
+      doc.setTextColor(80, 88, 112);
+      doc.text(bw.oversBowled.toFixed(1), margin + 340, innerY + 13.5, { align: 'right' });
+      doc.text(bw.runsConceded.toString(), margin + 380, innerY + 13.5, { align: 'right' });
+      
+      // Wickets highlighted in accent color if > 0
+      if (bw.wickets > 0) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(99, 118, 255); // blue accent
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(80, 88, 112);
+      }
+      doc.text(bw.wickets.toString(), margin + 420, innerY + 13.5, { align: 'right' });
+      
+      // Maidens
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(80, 88, 112);
+      doc.text(bw.maidens.toString(), margin + 460, innerY + 13.5, { align: 'right' });
+      
+      // Economy highlighted green if < 8
+      const econVal = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled) : 0;
+      const econStr = econVal.toFixed(1);
+      if (econVal < 8) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(40, 190, 120); // clean green
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(80, 88, 112);
+      }
+      doc.text(econStr, margin + contentWidth - 18, innerY + 13.5, { align: 'right' });
+      
+      innerY += 21;
     });
+    
+    // Draw Footer on Page 1 before wrapping
+    drawFooter(doc, 1, 2);
+    
+    curY += height4 + 11;
 
-    // Page 2 Footer
+    // ==========================================
+    // CARD 5: TEAM B INNINGS (Accent: [255, 85, 100])
+    // ==========================================
+    const listBattersB = m.secondInnings ? m.secondInnings.batsmen : [];
+    const activeBowlersB = m.secondInnings ? m.secondInnings.bowlers.filter(bw => bw.oversBowled > 0) : [];
+    
+    const height5 = 14 + 22 + 22 + 17 + (listBattersB.length * 21) + 21 + 6 + 22 + 17 + (activeBowlersB.length * 21) + 14;
+    
+    // Always calculate height and break page if it doesn't fit on Page 1
+    if (curY + height5 > pageHeight - margin - 30) {
+      doc.addPage();
+      currentPage = 2;
+      drawPageBackground();
+      curY = 24; // reset Y to top padding
+    }
+    
+    // Draw Glass Card 5 - Accent: Red [255, 85, 100]
+    drawGlassCard(margin, curY, contentWidth, height5, [255, 85, 100]);
+    
+    let innerY5 = curY + 14;
+    
+    // 1. Innings Header Area (2ND INNINGS label + Team Name + Score Badge)
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(255, 85, 100);
+    doc.text("2ND INNINGS", margin + 18, innerY5 + 5);
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(15);
+    doc.setTextColor(20, 22, 40);
+    doc.text(m.teamB.name.toUpperCase(), margin + 18, innerY5 + 17);
+    
+    // Score Badge Pill (right aligned)
+    const runsValB = m.secondInnings ? m.secondInnings.runs : 0;
+    const wicketsValB = m.secondInnings ? m.secondInnings.wickets : 0;
+    const oversValB = m.secondInnings ? (m.secondInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1) : "0.0";
+    const scoreStrTeamB = `${runsValB}/${wicketsValB}  (${oversValB})`;
+    const scorePillW5 = doc.getTextWidth(scoreStrTeamB) + 18;
+    drawPill(scoreStrTeamB, margin + contentWidth - 18 - scorePillW5, innerY5 + 4, [255, 85, 100], 8.5, true);
+    
+    innerY5 += 22;
+    
+    // 2. Batting Sub-badge
+    drawPill("BATTING", margin + 18, innerY5 + 2.5, [255, 85, 100], 6.5, true);
+    innerY5 += 22;
+    
+    // 3. Table Headers
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(255, 85, 100);
+    setOpacity(0.85);
+    doc.text("BATTER", margin + 18, innerY5 + 12);
+    doc.text("DISMISSAL", margin + 145, innerY5 + 12);
+    doc.text("R", margin + 340, innerY5 + 12, { align: 'right' });
+    doc.text("B", margin + 380, innerY5 + 12, { align: 'right' });
+    doc.text("4s", margin + 420, innerY5 + 12, { align: 'right' });
+    doc.text("6s", margin + 460, innerY5 + 12, { align: 'right' });
+    doc.text("SR", margin + contentWidth - 18, innerY5 + 12, { align: 'right' });
+    setOpacity(1.0);
+    
+    innerY5 += 17;
+    
+    // 4. Render Batting rows for Team B
+    listBattersB.forEach((b, idx) => {
+      if (idx % 2 === 0) {
+        doc.setFillColor(180, 185, 200);
+        setOpacity(0.05);
+        doc.roundedRect(margin + 10, innerY5, contentWidth - 20, 21, 4, 4, 'F');
+        setOpacity(1.0);
+      }
+      
+      // Batter Name
+      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(20, 22, 40);
+      doc.text(b.name, margin + 18, innerY5 + 13.5);
+      
+      // Dismissal Pill
+      const disText = getDismissalText(b, m.secondInnings ? m.secondInnings.bowlers : []);
+      drawDismissalPill(doc, disText, margin + 145, innerY5 + 5.5, 95, 10);
+      
+      // Values
+      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(20, 22, 40);
+      doc.text(b.runsScored.toString(), margin + 340, innerY5 + 13.5, { align: 'right' });
+      
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(80, 88, 112);
+      doc.text(b.ballsFaced.toString(), margin + 380, innerY5 + 13.5, { align: 'right' });
+      doc.text(b.fours.toString(), margin + 420, innerY5 + 13.5, { align: 'right' });
+      
+      // Gold highlight for 6s > 0
+      if (b.sixes > 0) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(230, 160, 40); // gold
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(20, 22, 40);
+      }
+      doc.text(b.sixes.toString(), margin + 460, innerY5 + 13.5, { align: 'right' });
+      
+      // SR formatting
+      const srVal = b.ballsFaced > 0 ? (b.runsScored / b.ballsFaced) * 100 : 0;
+      const srStr = srVal.toFixed(1);
+      if (srVal > 150) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(255, 85, 100); // 2nd Innings accent color
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(80, 88, 112);
+      }
+      doc.text(srStr, margin + contentWidth - 18, innerY5 + 13.5, { align: 'right' });
+      
+      innerY5 += 21;
+    });
+    
+    // 5. Total Row Team B
+    doc.setFillColor(255, 85, 100);
+    setOpacity(0.08);
+    doc.roundedRect(margin + 10, innerY5, contentWidth - 20, 21, 4, 4, 'F');
+    setOpacity(1.0);
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(20, 22, 40);
+    doc.text("TOTAL", margin + 18, innerY5 + 13.5);
+    
     doc.setFont("Helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(148, 163, 184);
-    doc.text("Match Operating System (MOS) · Designed by Areed Hassan", 12, 289);
-    doc.text(`Generated ${todayDateStr} · Page 2 of 2`, 198, 289, { align: 'right' });
+    doc.setFontSize(7.5);
+    doc.setTextColor(80, 88, 112);
+    const oversTextBStr = `overs: ${oversValB} / ${m.settings.oversPerMatch}`;
+    doc.text(oversTextBStr, margin + 65, innerY5 + 13);
+    
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(20, 22, 40);
+    const totScoreStrB = `${runsValB}/${wicketsValB}`;
+    doc.text(totScoreStrB, margin + contentWidth - 18, innerY5 + 14, { align: 'right' });
+    
+    innerY5 += 21 + 6;
+    
+    // 6. Bowling Section Header Label
+    drawPill("BOWLING", margin + 18, innerY5 + 2.5, [255, 85, 100], 6.5, true);
+    innerY5 += 22;
+    
+    // 7. Bowling Table Headers
+    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(255, 85, 100);
+    setOpacity(0.85);
+    doc.text("BOWLER", margin + 18, innerY5 + 12);
+    doc.text("O", margin + 340, innerY5 + 12, { align: 'right' });
+    doc.text("R", margin + 380, innerY5 + 12, { align: 'right' });
+    doc.text("W", margin + 420, innerY5 + 12, { align: 'right' });
+    doc.text("MDNS", margin + 460, innerY5 + 12, { align: 'right' });
+    doc.text("ECON", margin + contentWidth - 18, innerY5 + 12, { align: 'right' });
+    setOpacity(1.0);
+    
+    innerY5 += 17;
+    
+    // 8. Render Bowling rows for Team B
+    activeBowlersB.forEach((bw, idx) => {
+      if (idx % 2 === 0) {
+        doc.setFillColor(180, 185, 200);
+        setOpacity(0.05);
+        doc.roundedRect(margin + 10, innerY5, contentWidth - 20, 21, 4, 4, 'F');
+        setOpacity(1.0);
+      }
+      
+      // Bowler Name
+      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(20, 22, 40);
+      doc.text(bw.name, margin + 18, innerY5 + 13.5);
+      
+      // Standard metrics
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(80, 88, 112);
+      doc.text(bw.oversBowled.toFixed(1), margin + 340, innerY5 + 13.5, { align: 'right' });
+      doc.text(bw.runsConceded.toString(), margin + 380, innerY5 + 13.5, { align: 'right' });
+      
+      // Wickets highlighted in accent color if > 0
+      if (bw.wickets > 0) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(255, 85, 100); // red accent
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(80, 88, 112);
+      }
+      doc.text(bw.wickets.toString(), margin + 420, innerY5 + 13.5, { align: 'right' });
+      
+      // Maidens
+      doc.setFont("Helvetica", "normal");
+      doc.setTextColor(80, 88, 112);
+      doc.text(bw.maidens.toString(), margin + 460, innerY5 + 13.5, { align: 'right' });
+      
+      // Economy highlighted green if < 8
+      const econVal = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled) : 0;
+      const econStr = econVal.toFixed(1);
+      if (econVal < 8) {
+        doc.setFont("Helvetica-Bold", "normal");
+        doc.setTextColor(40, 190, 120); // green
+      } else {
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(80, 88, 112);
+      }
+      doc.text(econStr, margin + contentWidth - 18, innerY5 + 13.5, { align: 'right' });
+      
+      innerY5 += 21;
+    });
+    
+    // Draw Footer on Page 2
+    drawFooter(doc, currentPage, 2);
 
     const fileName = `MOS_Gully_Scorecard_${m.teamA.name.replace(/\s+/g, '_')}_vs_${m.teamB.name.replace(/\s+/g, '_')}.pdf`;
     doc.save(fileName);
