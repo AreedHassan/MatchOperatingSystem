@@ -85,7 +85,8 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
           resultText: currentCompletedMatch.winnerTeamId === 'tie' 
             ? 'Match ended in a Tie!' 
             : `${winnerName} won ${currentCompletedMatch.winMarginText}`,
-          momName: momDetails?.player.name || "None"
+          momName: momDetails?.player.name || "None",
+          fullMatch: currentCompletedMatch
         };
 
         const updated = [newItem, ...currentList];
@@ -372,7 +373,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       
       // Text
       pdfDoc.setTextColor(color[0], color[1], color[2]);
-      pdfDoc.setFont("Helvetica-Bold", "normal");
+      pdfDoc.setFont("Helvetica", "bold");
       pdfDoc.setFontSize(5.5);
       setOpacity(1.0);
       pdfDoc.text(text, px + pw/2, py + ph/2 + 2, { align: 'center' });
@@ -424,7 +425,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     drawPill(oversText, margin + contentWidth - 18 - oversPillW, curY + 15, [99, 118, 255], 7, true);
     
     // Team Names (STREET KINGS vs GULLY GODS)
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(18);
     doc.setTextColor(20, 22, 40);
     const teamNamesStr = `${m.teamA.name.toUpperCase()}  vs  ${m.teamB.name.toUpperCase()}`;
@@ -432,14 +433,14 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     
     // Scores line list
     const scoreTextA = `${m.teamA.name.toUpperCase()} ${m.firstInnings.runs}/${m.firstInnings.wickets}`;
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(13.5);
     doc.setTextColor(99, 118, 255);
     doc.text(scoreTextA, margin + 18, curY + 66);
     
     // Slash separator in muted gray
     const widthA = doc.getTextWidth(scoreTextA);
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setTextColor(150, 155, 178);
     doc.text("  /  ", margin + 18 + widthA, curY + 66);
     
@@ -449,7 +450,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     doc.text(scoreTextB, margin + 18 + widthA + widthSlash, curY + 66);
     
     // Match date & ID
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(80, 88, 112);
     const matchDetailsStr = `DATE: ${todayDateStr}   ·   MATCH ID: ${m.id.toUpperCase()}`;
@@ -473,7 +474,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       : m.winnerTeamId === 'team_a' ? m.teamA.name : m.teamB.name;
     const finalVerdict = m.winnerTeamId === 'tie' ? 'MATCH TIED' : `${winnerName.toUpperCase()} WIN`;
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(20, 22, 40);
     doc.text(finalVerdict, margin + 25, curY + 25);
@@ -498,7 +499,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     drawGlassCard(margin, curY, contentWidth, momHeight, [230, 160, 40]);
     
     // Label "MAN OF THE MATCH"
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(230, 160, 40);
     doc.text("MAN OF THE MATCH", margin + 18, curY + 17);
@@ -506,14 +507,14 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     // Player Name
     const mom = getManOfTheMatch(m);
     const momPlayerName = mom ? mom.player.name.toUpperCase() : "N/A";
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(16);
     doc.setTextColor(20, 22, 40);
     doc.text(momPlayerName, margin + 18, curY + 33);
     
     // Team Name
     const momTeamName = mom ? mom.team.name.toUpperCase() : "";
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(150, 155, 178);
     doc.text(momTeamName, margin + 18, curY + 42);
@@ -575,14 +576,14 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
         doc.roundedRect(bx, by, bw, bh, br, br, 'S');
         
         // Text 1: Value
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setFontSize(10.5);
         doc.setTextColor(230, 160, 40);
         setOpacity(1.0);
         doc.text(stat.val, bx + bw / 2, by + 14, { align: 'center' });
         
         // Text 2: Label
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setFontSize(5.5);
         doc.setTextColor(230, 160, 40);
         doc.text(stat.lbl, bx + bw / 2, by + 23, { align: 'center' });
@@ -603,12 +604,12 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     let innerY = curY + 14; // Start at top padding Y
     
     // 1. Innings Header Area (Innings Label + Team Name + Score Badge)
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(99, 118, 255);
     doc.text("1ST INNINGS", margin + 18, innerY + 5);
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(15);
     doc.setTextColor(20, 22, 40);
     doc.text(m.teamA.name.toUpperCase(), margin + 18, innerY + 17);
@@ -625,7 +626,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     innerY += 22; // increment batting label
     
     // 3. Table Headers
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(5.5);
     doc.setTextColor(99, 118, 255);
     setOpacity(0.85);
@@ -651,7 +652,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       }
       
       // Batter Name
-      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFont("Helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(20, 22, 40);
       doc.text(b.name, margin + 18, innerY + 13.5);
@@ -661,7 +662,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       drawDismissalPill(doc, disText, margin + 145, innerY + 5.5, 95, 10);
       
       // Values
-      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFont("Helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(20, 22, 40);
       doc.text(b.runsScored.toString(), margin + 340, innerY + 13.5, { align: 'right' });
@@ -673,7 +674,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       
       // Gold highlight for 6s > 0
       if (b.sixes > 0) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(230, 160, 40); // gold
       } else {
         doc.setFont("Helvetica", "normal");
@@ -685,7 +686,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       const srVal = b.ballsFaced > 0 ? (b.runsScored / b.ballsFaced) * 100 : 0;
       const srStr = srVal.toFixed(1);
       if (srVal > 150) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(99, 118, 255); // accent color
       } else {
         doc.setFont("Helvetica", "normal");
@@ -702,7 +703,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     doc.roundedRect(margin + 10, innerY, contentWidth - 20, 21, 4, 4, 'F');
     setOpacity(1.0);
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(20, 22, 40);
     doc.text("TOTAL", margin + 18, innerY + 13.5);
@@ -713,7 +714,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     const oversTextA = `overs: ${(m.firstInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1)} / ${m.settings.oversPerMatch}`;
     doc.text(oversTextA, margin + 65, innerY + 13);
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(20, 22, 40);
     const totScoreStrA = `${m.firstInnings.runs}/${m.firstInnings.wickets}`;
@@ -726,7 +727,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     innerY += 22;
     
     // 7. Bowling Table Headers
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(5.5);
     doc.setTextColor(99, 118, 255);
     setOpacity(0.85);
@@ -750,7 +751,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       }
       
       // Bowler Name
-      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFont("Helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(20, 22, 40);
       doc.text(bw.name, margin + 18, innerY + 13.5);
@@ -763,7 +764,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       
       // Wickets highlighted in accent color if > 0
       if (bw.wickets > 0) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(99, 118, 255); // blue accent
       } else {
         doc.setFont("Helvetica", "normal");
@@ -780,7 +781,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       const econVal = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled) : 0;
       const econStr = econVal.toFixed(1);
       if (econVal < 8) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(40, 190, 120); // clean green
       } else {
         doc.setFont("Helvetica", "normal");
@@ -818,12 +819,12 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     let innerY5 = curY + 14;
     
     // 1. Innings Header Area (2ND INNINGS label + Team Name + Score Badge)
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(255, 85, 100);
     doc.text("2ND INNINGS", margin + 18, innerY5 + 5);
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(15);
     doc.setTextColor(20, 22, 40);
     doc.text(m.teamB.name.toUpperCase(), margin + 18, innerY5 + 17);
@@ -843,7 +844,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     innerY5 += 22;
     
     // 3. Table Headers
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(5.5);
     doc.setTextColor(255, 85, 100);
     setOpacity(0.85);
@@ -868,7 +869,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       }
       
       // Batter Name
-      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFont("Helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(20, 22, 40);
       doc.text(b.name, margin + 18, innerY5 + 13.5);
@@ -878,7 +879,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       drawDismissalPill(doc, disText, margin + 145, innerY5 + 5.5, 95, 10);
       
       // Values
-      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFont("Helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(20, 22, 40);
       doc.text(b.runsScored.toString(), margin + 340, innerY5 + 13.5, { align: 'right' });
@@ -890,7 +891,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       
       // Gold highlight for 6s > 0
       if (b.sixes > 0) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(230, 160, 40); // gold
       } else {
         doc.setFont("Helvetica", "normal");
@@ -902,7 +903,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       const srVal = b.ballsFaced > 0 ? (b.runsScored / b.ballsFaced) * 100 : 0;
       const srStr = srVal.toFixed(1);
       if (srVal > 150) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(255, 85, 100); // 2nd Innings accent color
       } else {
         doc.setFont("Helvetica", "normal");
@@ -919,7 +920,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     doc.roundedRect(margin + 10, innerY5, contentWidth - 20, 21, 4, 4, 'F');
     setOpacity(1.0);
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(20, 22, 40);
     doc.text("TOTAL", margin + 18, innerY5 + 13.5);
@@ -930,7 +931,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     const oversTextBStr = `overs: ${oversValB} / ${m.settings.oversPerMatch}`;
     doc.text(oversTextBStr, margin + 65, innerY5 + 13);
     
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(20, 22, 40);
     const totScoreStrB = `${runsValB}/${wicketsValB}`;
@@ -943,7 +944,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     innerY5 += 22;
     
     // 7. Bowling Table Headers
-    doc.setFont("Helvetica-Bold", "normal");
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(5.5);
     doc.setTextColor(255, 85, 100);
     setOpacity(0.85);
@@ -967,7 +968,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       }
       
       // Bowler Name
-      doc.setFont("Helvetica-Bold", "normal");
+      doc.setFont("Helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(20, 22, 40);
       doc.text(bw.name, margin + 18, innerY5 + 13.5);
@@ -980,7 +981,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       
       // Wickets highlighted in accent color if > 0
       if (bw.wickets > 0) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(255, 85, 100); // red accent
       } else {
         doc.setFont("Helvetica", "normal");
@@ -997,7 +998,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       const econVal = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled) : 0;
       const econStr = econVal.toFixed(1);
       if (econVal < 8) {
-        doc.setFont("Helvetica-Bold", "normal");
+        doc.setFont("Helvetica", "bold");
         doc.setTextColor(40, 190, 120); // green
       } else {
         doc.setFont("Helvetica", "normal");
@@ -1446,58 +1447,66 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Regenerate mock full object to download PDF directly
-                              const miniMock: Match = {
-                                id: item.id,
-                                status: 'completed',
-                                date: item.date,
-                                tossWinnerId: 'team_a',
-                                tossDecision: 'bat',
-                                teamA: { id: 'team_a', name: item.teamAName, players: [] },
-                                teamB: { id: 'team_b', name: item.teamBName, players: [] },
-                                settings: {
-                                  oversPerMatch: 4,
-                                  ballsPerOver: 6,
-                                  playersPerTeam: 5,
-                                  widePenalty: 1,
-                                  noBallPenalty: 1,
-                                  freeHitOnNoBall: true,
-                                  onePitchCatchOut: true,
-                                  hitOutOfBoundaryOut: true,
-                                  lastManStanding: true,
-                                  vibrationFeedback: true,
-                                  voiceCommentary: true
-                                },
-                                firstInnings: {
-                                  battingTeamId: 'team_a',
-                                  bowlingTeamId: 'team_b',
-                                  runs: parseInt(item.teamAScore.split('/')[0]) || 0,
-                                  wickets: parseInt(item.teamAScore.split('/')[1]) || 0,
-                                  ballsBowled: 24,
-                                  overs: [],
-                                  batsmen: [{ id: '1', name: item.momName || 'Batsman', runsScored: parseInt(item.teamAScore.split('/')[0]) || 0, ballsFaced: 12, fours: 2, sixes: 4, isOut: false, oversBowled: 0, maidens: 0, runsConceded: 0, wickets: 0, wides: 0, noballs: 0 }],
-                                  bowlers: [{ id: '1', name: 'Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: 2, maidens: 0, runsConceded: 18, wickets: 2, wides: 0, noballs: 0 }],
-                                  tempBatter1Id: '1',
-                                  tempBatter2Id: '2',
-                                  tempBowlerId: '1'
-                                },
-                                secondInnings: {
-                                  battingTeamId: 'team_b',
-                                  bowlingTeamId: 'team_a',
-                                  runs: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[0]) || 0) : 0,
-                                  wickets: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[1]) || 0) : 0,
-                                  ballsBowled: 24,
-                                  overs: [],
-                                  batsmen: [{ id: '10', name: 'Chase Batter', runsScored: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[0]) || 0) : 0, ballsFaced: 12, fours: 2, sixes: 1, isOut: false, oversBowled: 0, maidens: 0, runsConceded: 0, wickets: 0, wides: 0, noballs: 0 }],
-                                  bowlers: [{ id: '11', name: 'Defense Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: 2, maidens: 0, runsConceded: 20, wickets: 1, wides: 0, noballs: 0 }],
-                                  tempBatter1Id: '10',
-                                  tempBatter2Id: '11',
-                                  tempBowlerId: '11'
-                                },
-                                winnerTeamId: item.resultText.includes(item.teamAName) ? 'team_a' : 'team_b',
-                                winMarginText: item.resultText.substring(item.resultText.indexOf("won") + 4)
-                              };
-                              handleDownloadPDF(miniMock);
+                              if (item.fullMatch) {
+                                handleDownloadPDF(item.fullMatch);
+                              } else {
+                                // Regenerate mock full object to download PDF directly
+                                const isTie = item.resultText.toLowerCase().includes('tie');
+                                const winnerId = isTie ? 'tie' : (item.resultText.includes(item.teamAName) ? 'team_a' : 'team_b');
+                                const marginTextStr = isTie ? 'after standard play' : (item.resultText.includes("won") ? item.resultText.substring(item.resultText.indexOf("won") + 4) : "after standard play");
+
+                                const miniMock: Match = {
+                                  id: item.id,
+                                  status: 'completed',
+                                  date: item.date,
+                                  tossWinnerId: 'team_a',
+                                  tossDecision: 'bat',
+                                  teamA: { id: 'team_a', name: item.teamAName, players: [] },
+                                  teamB: { id: 'team_b', name: item.teamBName, players: [] },
+                                  settings: {
+                                    oversPerMatch: 4,
+                                    ballsPerOver: 6,
+                                    playersPerTeam: 5,
+                                    widePenalty: 1,
+                                    noBallPenalty: 1,
+                                    freeHitOnNoBall: true,
+                                    onePitchCatchOut: true,
+                                    hitOutOfBoundaryOut: true,
+                                    lastManStanding: true,
+                                    vibrationFeedback: true,
+                                    voiceCommentary: true
+                                  },
+                                  firstInnings: {
+                                    battingTeamId: 'team_a',
+                                    bowlingTeamId: 'team_b',
+                                    runs: parseInt(item.teamAScore.split('/')[0]) || 0,
+                                    wickets: parseInt(item.teamAScore.split('/')[1]) || 0,
+                                    ballsBowled: 24,
+                                    overs: [],
+                                    batsmen: [{ id: '1', name: item.momName || 'Batsman', runsScored: parseInt(item.teamAScore.split('/')[0]) || 0, ballsFaced: 12, fours: 2, sixes: 4, isOut: false, oversBowled: 0, maidens: 0, runsConceded: 0, wickets: 0, wides: 0, noballs: 0 }],
+                                    bowlers: [{ id: '1', name: 'Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: 2, maidens: 0, runsConceded: 18, wickets: 2, wides: 0, noballs: 0 }],
+                                    tempBatter1Id: '1',
+                                    tempBatter2Id: '2',
+                                    tempBowlerId: '1'
+                                  },
+                                  secondInnings: {
+                                    battingTeamId: 'team_b',
+                                    bowlingTeamId: 'team_a',
+                                    runs: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[0]) || 0) : 0,
+                                    wickets: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[1]) || 0) : 0,
+                                    ballsBowled: 24,
+                                    overs: [],
+                                    batsmen: [{ id: '10', name: 'Chase Batter', runsScored: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[0]) || 0) : 0, ballsFaced: 12, fours: 2, sixes: 1, isOut: false, oversBowled: 0, maidens: 0, runsConceded: 0, wickets: 0, wides: 0, noballs: 0 }],
+                                    bowlers: [{ id: '11', name: 'Defense Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: 2, maidens: 0, runsConceded: 20, wickets: 1, wides: 0, noballs: 0 }],
+                                    tempBatter1Id: '10',
+                                    tempBatter2Id: '11',
+                                    tempBowlerId: '11'
+                                  },
+                                  winnerTeamId: winnerId,
+                                  winMarginText: marginTextStr
+                                };
+                                handleDownloadPDF(miniMock);
+                              }
                             }}
                             className="bg-lime-400 hover:bg-lime-500 text-zinc-950 font-black tracking-widest text-[8px] py-1.5 px-2 rounded uppercase tracking-wider cursor-pointer"
                           >

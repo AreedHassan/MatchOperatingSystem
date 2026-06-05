@@ -106,4 +106,5 @@ export interface MatchHistoryItem {
   teamBScore: string; // "98/8 (10 overs)"
   resultText: string;
   momName?: string;
+  fullMatch?: Match;
 }
