@@ -19,9 +19,7 @@ import {
 import { speakText } from './utils/commentary';
 
 export default function App() {
-  const [loading, setLoading] = useState(() => {
-    return !localStorage.getItem('mos_loading_shown_v1');
-  });
+  const [loading, setLoading] = useState(true);
   const [match, setMatch] = useState<Match | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
@@ -170,7 +168,6 @@ export default function App() {
     return (
       <LoadingScreen 
         onComplete={() => {
-          localStorage.setItem('mos_loading_shown_v1', 'true');
           setLoading(false);
         }} 
       />
