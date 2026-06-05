@@ -3,9 +3,9 @@
   "name": "Match OperatingSystem",
   "short_name": "MOS",
   "description": "Premium responsive Gully Cricket companion with custom rules, animated toss simulator, dynamic win forecasting, and automatic Man of the Match awards.",
-  "start_url": "https://match-operating-system.vercel.app/",
+  "start_url": "https://matchoperatingsystem.vercel.app/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#0a0a0a",
   "theme_color": "#39ff14",
   "orientation": "any",
@@ -15,32 +15,57 @@
     "utilities"
   ],
   "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.mos.app",
+      "id": "com.mos.app"
+    }
+  ],
+  "iarc_rating_id": "8b51ddee-ef80-4efb-86d4-dcd7b9b189aa",
+  "scope_extensions": [
+    {
+      "origin": "https://matchoperatingsystem.vercel.app"
+    }
+  ],
   "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icon.jpg",
       "sizes": "1024x1024",
       "type": "image/jpeg",
       "purpose": "any"
-    },
-    {
-      "src": "/icon.jpg",
-      "sizes": "1024x1024",
-      "type": "image/jpeg",
-      "purpose": "maskable"
     }
   ],
   "screenshots": [
     {
-      "src": "/icon.jpg",
-      "sizes": "1024x1024",
-      "type": "image/jpeg",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "form_factor": "wide",
       "label": "Match Operating System Main Hub"
     },
     {
-      "src": "/icon.jpg",
-      "sizes": "1024x1024",
-      "type": "image/jpeg",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "form_factor": "narrow",
       "label": "Match Operating System App Dashboard"
     }

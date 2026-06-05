@@ -30,6 +30,9 @@ interface MatchHistoryProps {
 export default function MatchHistory({ currentCompletedMatch, onNewMatch }: MatchHistoryProps) {
   const [pastMatches, setPastMatches] = useState<MatchHistoryItem[]>([]);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
+  const [showPdfSuccessModal, setShowPdfSuccessModal] = useState(false);
+  const [generatedPdfBlob, setGeneratedPdfBlob] = useState<Blob | null>(null);
+  const [pdfFileName, setPdfFileName] = useState('');
 
   // Load from localstorage on mount
   useEffect(() => {
@@ -390,7 +393,34 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     doc.setFontSize(8);
     doc.text("Match Operating System (MOS) Scorecard Engine • Prepared in high fidelity Vector PDF Space", 12, 280);
 
-    doc.save(`MOS_Gully_Scorecard_${m.teamA.name.replace(/\s+/g, '_')}_vs_${m.teamB.name.replace(/\s+/g, '_')}.pdf`);
+    const fileName = `MOS_Gully_Scorecard_${m.teamA.name.replace(/\s+/g, '_')}_vs_${m.teamB.name.replace(/\s+/g, '_')}.pdf`;
+    doc.save(fileName);
+
+    const pdfBlob = doc.output('blob');
+    setGeneratedPdfBlob(pdfBlob);
+    setPdfFileName(fileName);
+    setShowPdfSuccessModal(true);
+  };
+
+  const handleOpenPDFNative = async () => {
+    if (!generatedPdfBlob) return;
+    try {
+      const file = new File([generatedPdfBlob], pdfFileName, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'MOS Gully Cricket Scorecard',
+          text: 'Pristine Match Operating System (MOS) Scorecard Records PDF'
+        });
+      } else {
+        const fileURL = URL.createObjectURL(generatedPdfBlob);
+        window.open(fileURL, '_blank');
+      }
+    } catch (error) {
+      console.error("Failed to call native reader chooser:", error);
+      const fileURL = URL.createObjectURL(generatedPdfBlob);
+      window.open(fileURL, '_blank');
+    }
   };
 
   const activeMOM = currentCompletedMatch ? getManOfTheMatch(currentCompletedMatch) : null;
@@ -877,6 +907,61 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
           </button>
         </div>
       )}
+
+      {/* PDF Success & Native Reader Dialog */}
+      <AnimatePresence>
+        {showPdfSuccessModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]" id="modal-pdf-success">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-zinc-900 border border-white/10 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-zinc-100 space-y-5"
+            >
+              <div className="text-center space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-2xl bg-lime-400/10 border border-lime-400/20 flex items-center justify-center text-lime-400">
+                  <Download size={22} className="animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-base uppercase tracking-tight">
+                    PDF Scorecard Ready!
+                  </h3>
+                  <p className="text-xs text-white/55 mt-1.5 leading-relaxed font-sans">
+                    The PDF has been compiled successfully and saved directly to your device storage.
+                  </p>
+                  <p className="text-[11px] text-white/40 mt-2 leading-relaxed font-sans border-t border-white/5 pt-2">
+                    Would you like to open it immediately using your device's default or preferred PDF viewer application?
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPdfSuccessModal(false);
+                    setGeneratedPdfBlob(null);
+                  }}
+                  className="w-full py-3.5 border border-white/10 hover:bg-white/5 text-white/70 font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
+                >
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleOpenPDFNative();
+                    setShowPdfSuccessModal(false);
+                    setGeneratedPdfBlob(null);
+                  }}
+                  className="w-full py-3.5 bg-lime-400 hover:bg-lime-500 text-zinc-950 font-black text-xs uppercase tracking-wider rounded-xl transition shadow shadow-lime-400/20 cursor-pointer"
+                >
+                  Open PDF Viewer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

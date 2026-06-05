@@ -1,15 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Nunito", "SF Pro Rounded", "-apple-system", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "SF Pro Balanced", "-apple-system", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-body {
+html, body {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
   background-color: #030303;
   color: #f5f5f7;
-  overflow-x: hidden;
   font-family: var(--font-sans);
 }
 

@@ -36,6 +36,8 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
   const [completedMatchState, setCompletedMatchState] = useState<Match | null>(null);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
   const [statsActiveTab, setStatsActiveTab] = useState<'batting' | 'bowling'>('batting');
+  const [showLastManPrompt, setShowLastManPrompt] = useState(false);
+  const [pendingLmsMatch, setPendingLmsMatch] = useState<Match | null>(null);
   
   // Wicket selection temporary parameters
   const [wicketType, setWicketType] = useState<Player['howOut']>('bowled');
@@ -107,8 +109,8 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
 
   // Switch batting roles manually (Rotate Strike)
   const handleRotateStrike = () => {
-    if (match.settings.playersPerTeam === 1) {
-      showAlert("A single player cannot rotate strike!");
+    if (match.settings.playersPerTeam === 1 || !inning.tempBatter2Id) {
+      showAlert("Strike rotation is disabled when batting alone!");
       return;
     }
     triggerVibrate(30);
@@ -252,7 +254,8 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
 
     // 5. Strike Rotations on run counts
     const runsBattedOrRun = batRuns > 0 ? batRuns : ((params.extraType === 'bye' || params.extraType === 'legbye') ? params.extras : 0);
-    if (runsBattedOrRun % 2 === 1 && match.settings.playersPerTeam !== 1) {
+    const isLMSActive = match.settings.playersPerTeam >= 2 && workingInning.tempBatter2Id === "";
+    if (runsBattedOrRun % 2 === 1 && match.settings.playersPerTeam !== 1 && !isLMSActive) {
       const tempId = workingInning.tempBatter1Id;
       workingInning.tempBatter1Id = workingInning.tempBatter2Id;
       workingInning.tempBatter2Id = tempId;
@@ -269,22 +272,29 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
       }
       mainBowler.wickets += 1;
 
-      const totalWicketsAllowed = match.isSuperOver 
-        ? (match.settings.playersPerTeam === 1 ? 1 : 2)
-        : (match.settings.playersPerTeam === 1 ? 1 : match.settings.playersPerTeam - 1);
-      const remainsToBat = workingInning.batsmen.filter(b => !b.isOut && b.id !== workingInning.tempBatter1Id && b.id !== workingInning.tempBatter2Id).length;
+      const remainingBatsmen = workingInning.batsmen.filter(b => !b.isOut);
 
-      if (workingInning.wickets >= totalWicketsAllowed) {
-        if (match.settings.lastManStanding && workingInning.wickets === totalWicketsAllowed && match.settings.playersPerTeam > 1 && !match.isSuperOver) {
-          triggerAudio("Nine wickets down! Last batsman standing rules activated.");
-        } else {
+      if (match.settings.playersPerTeam === 1) {
+        // Single Player Team
+        triggerAudio(`${battingTeam.name} are all out for ${workingInning.runs} runs!`);
+        handleEndInnings(updatedMatch);
+        return;
+      } else {
+        // Multi Player Team (2 or more players)
+        if (remainingBatsmen.length === 0) {
           triggerAudio(`${battingTeam.name} are all out for ${workingInning.runs} runs!`);
           handleEndInnings(updatedMatch);
           return;
+        } else if (remainingBatsmen.length === 1) {
+          // Exactly 1 batsman remains not out. Ask whether the team wishes to continue batting
+          setPendingLmsMatch(updatedMatch);
+          setShowLastManPrompt(true);
+          onUpdateMatch(updatedMatch);
+          return;
+        } else {
+          // More than 1 batsman left, select the next available batsman
+          setShowBatterSelect(true);
         }
-      } else {
-        // Select next batsman
-        setShowBatterSelect(true);
       }
     }
 
@@ -311,7 +321,7 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
       triggerVibrate([100, 50, 100]);
 
       // Over finished. Automatic strike rotation
-      if (match.settings.playersPerTeam !== 1) {
+      if (match.settings.playersPerTeam !== 1 && !isLMSActive) {
         const t = workingInning.tempBatter1Id;
         workingInning.tempBatter1Id = workingInning.tempBatter2Id;
         workingInning.tempBatter2Id = t;
@@ -1770,6 +1780,80 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
                   </button>
                 </div>
 
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+ 
+      {/* Last Man Standing Confirmation Modal */}
+      <AnimatePresence>
+        {showLastManPrompt && pendingLmsMatch && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[60]" id="modal-lms-confirm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-zinc-900 border border-white/10 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-zinc-100 space-y-5"
+            >
+              <div className="text-center space-y-3">
+                <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                  <User size={22} className="animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-base uppercase tracking-tight">
+                    Last Man Standing? 🏏
+                  </h3>
+                  <p className="text-xs text-white/55 mt-1.5 leading-relaxed font-sans">
+                    All batsmen have been dismissed except for the last remaining batsman:{' '}
+                    <span className="text-lime-400 font-bold">
+                      {(() => {
+                        const workingInning = isInnings2 && pendingLmsMatch.secondInnings ? pendingLmsMatch.secondInnings : pendingLmsMatch.firstInnings;
+                        return workingInning.batsmen.find(b => !b.isOut)?.name || 'Last Batsman';
+                      })()}
+                    </span>.
+                  </p>
+                  <p className="text-[11px] text-white/40 mt-2 leading-relaxed font-sans border-t border-white/5 pt-2">
+                    Would you like them to continue batting alone? Strike rotation will be completely disabled, and they will receive credit for every run scored alone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Answered NO: Innings concluded at this point
+                    const workingInning = isInnings2 && pendingLmsMatch.secondInnings ? pendingLmsMatch.secondInnings : pendingLmsMatch.firstInnings;
+                    triggerAudio(`${battingTeam.name} decided not to continue. Innings complete for ${workingInning.runs} runs.`);
+                    handleEndInnings(pendingLmsMatch);
+                    setShowLastManPrompt(false);
+                    setPendingLmsMatch(null);
+                  }}
+                  className="w-full py-3.5 border border-white/10 hover:bg-white/5 text-white/70 font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
+                >
+                  Conclude Innings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Answered YES: Continue batting as LMS!
+                    const updatedMatch = JSON.parse(JSON.stringify(pendingLmsMatch)) as Match;
+                    const workingInning = isInnings2 && updatedMatch.secondInnings ? updatedMatch.secondInnings : updatedMatch.firstInnings;
+                    const lastBatter = workingInning.batsmen.find(b => !b.isOut);
+                    if (lastBatter) {
+                      workingInning.tempBatter1Id = lastBatter.id;
+                      workingInning.tempBatter2Id = ""; // Clear non-striker
+                      triggerAudio(`${lastBatter.name} will continue batting alone as Last Man Standing!`);
+                    }
+                    onUpdateMatch(updatedMatch);
+                    setShowLastManPrompt(false);
+                    setPendingLmsMatch(null);
+                  }}
+                  className="w-full py-3.5 bg-lime-500 hover:bg-lime-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow shadow-lime-500/20 cursor-pointer"
+                >
+                  Yes, Continue!
+                </button>
               </div>
             </motion.div>
           </div>
