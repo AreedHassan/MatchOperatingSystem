@@ -3,7 +3,7 @@
   "name": "Match OperatingSystem",
   "short_name": "MOS",
   "description": "Premium responsive Gully Cricket companion with custom rules, animated toss simulator, dynamic win forecasting, and automatic Man of the Match awards.",
-  "start_url": "https://matchoperatingsystem.vercel.app/",
+  "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
   "background_color": "#0a0a0a",
