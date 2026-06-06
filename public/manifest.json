@@ -52,12 +52,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    },
-    {
-      "src": "/icon.jpg",
-      "sizes": "1024x1024",
-      "type": "image/jpeg",
-      "purpose": "any"
     }
   ],
   "screenshots": [
