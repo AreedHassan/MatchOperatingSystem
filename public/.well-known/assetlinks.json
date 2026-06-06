@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.areed.mos",
+      "sha256_cert_fingerprints": [
+        "CE:89:59:C2:05:6F:16:C7:48:0A:05:15:E2:F8:EC:80:F8:77:B4:7A:16:32:0C:4F:46:14:4A:AD:4C:80:39:A2"
+      ]
+    }
+  }
+]
