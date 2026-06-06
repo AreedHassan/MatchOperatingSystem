@@ -1,3 +1,4 @@
+// Match Operating System (MOS) - Progressive Web App Edition with custom layouts
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Match, MatchSettings, Team, Inning } from './types';
