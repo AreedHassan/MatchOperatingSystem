@@ -107,4 +107,5 @@ export interface MatchHistoryItem {
   resultText: string;
   momName?: string;
   fullMatch?: Match;
+  overs?: number;
 }

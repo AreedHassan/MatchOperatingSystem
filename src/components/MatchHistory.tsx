@@ -86,7 +86,8 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
             ? 'Match ended in a Tie!' 
             : `${winnerName} won ${currentCompletedMatch.winMarginText}`,
           momName: momDetails?.player.name || "None",
-          fullMatch: currentCompletedMatch
+          fullMatch: currentCompletedMatch,
+          overs: currentCompletedMatch.settings.oversPerMatch
         };
 
         const updated = [newItem, ...currentList];
@@ -103,14 +104,33 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     }
   };
 
+  // Helper to determine the absolute immutable original team of any player during the match
+  const getPlayerOriginalTeam = (m: Match, b: Player | { name: string; id?: string }) => {
+    if (m.teamA.players.includes(b.name)) return m.teamA;
+    if (m.teamB.players.includes(b.name)) return m.teamB;
+    
+    // Fallback/safeguard checking ID prefixes
+    if (b.id) {
+      if (b.id.startsWith('player_a_')) {
+        return m.firstInnings.battingTeamId === 'team_a' ? m.teamA : m.teamB;
+      }
+      if (b.id.startsWith('player_b_')) {
+        return m.firstInnings.bowlingTeamId === 'team_a' ? m.teamA : m.teamB;
+      }
+    }
+    
+    // Default to first innings batting team
+    return m.firstInnings.battingTeamId === 'team_a' ? m.teamA : m.teamB;
+  };
+
   // Man of the Match (MOM) calculation engine
   const getManOfTheMatch = (m: Match) => {
     const playersMap = new Map<string, { player: Player; team: Team; points: number }>();
 
-    const calculatePointsForInning = (inn: Inning, batTeam: Team, bowlTeam: Team) => {
+    const calculatePointsForInning = (inn: Inning) => {
       // 1. Process Batters
       inn.batsmen.forEach(b => {
-        // Points: 1 point per run, 4 points per boundary 4, 8 points per sixer 6,
+        // Points: 1.25 point per run, 2 points per boundary 4, 4 points per sixer 6,
         // and a milestone bonus for crossings!
         let pts = b.runsScored * 1.25;
         pts += b.fours * 2;
@@ -125,7 +145,25 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
           else if (sr >= 150) pts += 8;
         }
 
-        playersMap.set(b.id, { player: b, team: batTeam, points: pts });
+        const originalTeam = getPlayerOriginalTeam(m, b);
+        const existing = playersMap.get(b.id);
+        if (existing) {
+          existing.points += pts;
+          // Merge batting stats into existing
+          existing.player = {
+            ...existing.player,
+            runsScored: b.runsScored,
+            ballsFaced: b.ballsFaced,
+            fours: b.fours,
+            sixes: b.sixes,
+            isOut: b.isOut,
+            howOut: b.howOut || existing.player.howOut,
+            dismissedBy: b.dismissedBy || existing.player.dismissedBy,
+            helperPlayer: b.helperPlayer || existing.player.helperPlayer,
+          };
+        } else {
+          playersMap.set(b.id, { player: { ...b }, team: originalTeam, points: pts });
+        }
       });
 
       // 2. Process Bowlers
@@ -141,18 +179,29 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
           else if (econ >= 12.0) pts -= 10; // penalty for getting smashed!
         }
 
+        const originalTeam = getPlayerOriginalTeam(m, bowl);
         const existing = playersMap.get(bowl.id);
         if (existing) {
           existing.points += pts;
+          // Merge bowling stats into existing
+          existing.player = {
+            ...existing.player,
+            oversBowled: bowl.oversBowled,
+            maidens: bowl.maidens,
+            runsConceded: bowl.runsConceded,
+            wickets: bowl.wickets,
+            wides: bowl.wides,
+            noballs: bowl.noballs,
+          };
         } else {
-          playersMap.set(bowl.id, { player: bowl, team: bowlTeam, points: pts });
+          playersMap.set(bowl.id, { player: { ...bowl }, team: originalTeam, points: pts });
         }
       });
     };
 
-    calculatePointsForInning(m.firstInnings, m.teamA, m.teamB);
+    calculatePointsForInning(m.firstInnings);
     if (m.secondInnings) {
-      calculatePointsForInning(m.secondInnings, m.teamB, m.teamA);
+      calculatePointsForInning(m.secondInnings);
     }
 
     // Sort players map by points
@@ -171,22 +220,24 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     let topBatters: { name: string; team: string; runs: number; balls: number }[] = [];
     let topBowlers: { name: string; team: string; wickets: number; runs: number; overs: number }[] = [];
 
-    const harvestFromInning = (inn: Inning, batTeam: Team, bowlTeam: Team) => {
+    const harvestFromInning = (inn: Inning) => {
       inn.batsmen.forEach(b => {
         if (b.runsScored > 0) {
-          topBatters.push({ name: b.name, team: batTeam.name, runs: b.runsScored, balls: b.ballsFaced });
+          const originalTeam = getPlayerOriginalTeam(m, b);
+          topBatters.push({ name: b.name, team: originalTeam.name, runs: b.runsScored, balls: b.ballsFaced });
         }
       });
       inn.bowlers.forEach(bw => {
         if (bw.oversBowled > 0) {
-          topBowlers.push({ name: bw.name, team: bowlTeam.name, wickets: bw.wickets, runs: bw.runsConceded, overs: bw.oversBowled });
+          const originalTeam = getPlayerOriginalTeam(m, bw);
+          topBowlers.push({ name: bw.name, team: originalTeam.name, wickets: bw.wickets, runs: bw.runsConceded, overs: bw.oversBowled });
         }
       });
     };
 
-    harvestFromInning(m.firstInnings, m.teamA, m.teamB);
+    harvestFromInning(m.firstInnings);
     if (m.secondInnings) {
-      harvestFromInning(m.secondInnings, m.teamB, m.teamA);
+      harvestFromInning(m.secondInnings);
     }
 
     topBatters.sort((a,b) => b.runs - a.runs);
@@ -609,10 +660,11 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     doc.setTextColor(99, 118, 255);
     doc.text("1ST INNINGS", margin + 18, innerY + 5);
     
+    const firstInnsBatTeam = m.firstInnings.battingTeamId === 'team_a' ? m.teamA : m.teamB;
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(15);
     doc.setTextColor(20, 22, 40);
-    doc.text(m.teamA.name.toUpperCase(), margin + 18, innerY + 17);
+    doc.text(firstInnsBatTeam.name.toUpperCase(), margin + 18, innerY + 17);
     
     // Score Badge Pill (right aligned)
     const scoreStrTeamA = `${m.firstInnings.runs}/${m.firstInnings.wickets}  (${(m.firstInnings.ballsBowled / m.settings.ballsPerOver).toFixed(1)})`;
@@ -824,10 +876,11 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
     doc.setTextColor(255, 85, 100);
     doc.text("2ND INNINGS", margin + 18, innerY5 + 5);
     
+    const secondInnsBatTeam = m.firstInnings.battingTeamId === 'team_a' ? m.teamB : m.teamA;
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(15);
     doc.setTextColor(20, 22, 40);
-    doc.text(m.teamB.name.toUpperCase(), margin + 18, innerY5 + 17);
+    doc.text(secondInnsBatTeam.name.toUpperCase(), margin + 18, innerY5 + 17);
     
     // Score Badge Pill (right aligned)
     const runsValB = m.secondInnings ? m.secondInnings.runs : 0;
@@ -1464,7 +1517,7 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
                                   teamA: { id: 'team_a', name: item.teamAName, players: [] },
                                   teamB: { id: 'team_b', name: item.teamBName, players: [] },
                                   settings: {
-                                    oversPerMatch: 4,
+                                    oversPerMatch: item.overs || 4,
                                     ballsPerOver: 6,
                                     playersPerTeam: 5,
                                     widePenalty: 1,
@@ -1481,10 +1534,10 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
                                     bowlingTeamId: 'team_b',
                                     runs: parseInt(item.teamAScore.split('/')[0]) || 0,
                                     wickets: parseInt(item.teamAScore.split('/')[1]) || 0,
-                                    ballsBowled: 24,
+                                    ballsBowled: (item.overs || 4) * 6,
                                     overs: [],
                                     batsmen: [{ id: '1', name: item.momName || 'Batsman', runsScored: parseInt(item.teamAScore.split('/')[0]) || 0, ballsFaced: 12, fours: 2, sixes: 4, isOut: false, oversBowled: 0, maidens: 0, runsConceded: 0, wickets: 0, wides: 0, noballs: 0 }],
-                                    bowlers: [{ id: '1', name: 'Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: 2, maidens: 0, runsConceded: 18, wickets: 2, wides: 0, noballs: 0 }],
+                                    bowlers: [{ id: '1', name: 'Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: item.overs || 2, maidens: 0, runsConceded: 18, wickets: 2, wides: 0, noballs: 0 }],
                                     tempBatter1Id: '1',
                                     tempBatter2Id: '2',
                                     tempBowlerId: '1'
@@ -1494,10 +1547,10 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
                                     bowlingTeamId: 'team_a',
                                     runs: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[0]) || 0) : 0,
                                     wickets: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[1]) || 0) : 0,
-                                    ballsBowled: 24,
+                                    ballsBowled: (item.overs || 4) * 6,
                                     overs: [],
                                     batsmen: [{ id: '10', name: 'Chase Batter', runsScored: item.teamBScore !== "DNB" ? (parseInt(item.teamBScore.split('/')[0]) || 0) : 0, ballsFaced: 12, fours: 2, sixes: 1, isOut: false, oversBowled: 0, maidens: 0, runsConceded: 0, wickets: 0, wides: 0, noballs: 0 }],
-                                    bowlers: [{ id: '11', name: 'Defense Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: 2, maidens: 0, runsConceded: 20, wickets: 1, wides: 0, noballs: 0 }],
+                                    bowlers: [{ id: '11', name: 'Defense Bowler', runsScored: 0, ballsFaced: 0, fours: 0, sixes: 0, isOut: false, oversBowled: item.overs || 2, maidens: 0, runsConceded: 20, wickets: 1, wides: 0, noballs: 0 }],
                                     tempBatter1Id: '10',
                                     tempBatter2Id: '11',
                                     tempBowlerId: '11'
