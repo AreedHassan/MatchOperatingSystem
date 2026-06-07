@@ -13,13 +13,10 @@ html, body {
   padding: 0;
   width: 100%;
   overflow-x: hidden;
+  overscroll-behavior: none;
   background-color: #030303;
   color: #f5f5f7;
   font-family: var(--font-sans);
-}
-
-body {
-  overscroll-behavior-y: contain;
 }
 
 /* Custom Glassmorphism styles for premium responsive aesthetic */
