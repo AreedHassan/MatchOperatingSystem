@@ -126,26 +126,56 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
   // Man of the Match (MOM) calculation engine
   const getManOfTheMatch = (m: Match) => {
     const playersMap = new Map<string, { player: Player; team: Team; points: number }>();
+    const ballsPerOver = m.settings?.ballsPerOver || 6;
 
-    const calculatePointsForInning = (inn: Inning) => {
+    const firstInnsRuns = m.firstInnings.runs;
+    const secondInnsRuns = m.secondInnings ? m.secondInnings.runs : 0;
+
+    const calculatePointsForInning = (inn: Inning, isSecondInnings: boolean) => {
+      const teamTotalRuns = inn.runs;
+      const opponentBatsmen = isSecondInnings ? m.firstInnings.batsmen : (m.secondInnings ? m.secondInnings.batsmen : []);
+
       // 1. Process Batters
       inn.batsmen.forEach(b => {
-        // Points: 1.25 point per run, 2 points per boundary 4, 4 points per sixer 6,
-        // and a milestone bonus for crossings!
-        let pts = b.runsScored * 1.25;
-        pts += b.fours * 2;
-        pts += b.sixes * 4;
-        if (b.runsScored >= 25) pts += 15; // Gully Half-quarter century bonus
-        if (b.runsScored >= 50) pts += 35; // Gully Century bonus
+        // Base points: 1.5 pts per run
+        let pts = b.runsScored * 1.5;
+        
+        // Boundaries bonus
+        pts += b.fours * 2.0;
+        pts += b.sixes * 4.0;
+        
+        // Milestone bonuses
+        if (b.runsScored >= 25) pts += 10;
+        if (b.runsScored >= 50) pts += 25;
+        if (b.runsScored >= 75) pts += 40;
+        if (b.runsScored >= 100) pts += 60;
 
-        // Strike rate points (minimum 5 balls faced)
-        if (b.ballsFaced >= 5) {
+        // Strike rate points (minimum 3 balls faced)
+        if (b.ballsFaced >= 3) {
           const sr = (b.runsScored / b.ballsFaced) * 100;
-          if (sr >= 200) pts += 15;
-          else if (sr >= 150) pts += 8;
+          if (sr >= 250) pts += 15;
+          else if (sr >= 200) pts += 10;
+          else if (sr >= 150) pts += 5;
+          else if (sr >= 100) pts += 1;
+          else if (sr < 75) pts -= 5;
+          else if (sr < 50) pts -= 10;
         }
 
+        // Team total score contribution
+        if (teamTotalRuns > 0) {
+          const contributionPct = (b.runsScored / teamTotalRuns) * 100;
+          pts += contributionPct * 0.35; // e.g. 50% contribution = +17.5 pts
+        }
+
+        // Match situation pressure
         const originalTeam = getPlayerOriginalTeam(m, b);
+        if (isSecondInnings) {
+          pts += b.runsScored * 0.20; // chasing pressure reward
+          if (!b.isOut && m.winnerTeamId === originalTeam.id && b.runsScored >= 10) {
+            pts += 15; // finisher bonus
+          }
+        }
+
         const existing = playersMap.get(b.id);
         if (existing) {
           existing.points += pts;
@@ -168,15 +198,45 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
 
       // 2. Process Bowlers
       inn.bowlers.forEach(bowl => {
-        let pts = bowl.wickets * 25.0; // Huge weight for wickets
-        pts += bowl.maidens * 20.0; // Maidens are extremely rare & valuable in street play
+        // Base points per wicket
+        let pts = bowl.wickets * 25.0;
+        pts += bowl.maidens * 15.0;
         
-        // Economy discount (minimum 1 over bowled)
-        if (bowl.oversBowled >= 1) {
-          const econ = bowl.runsConceded / bowl.oversBowled;
+        // Accurate partial-over calculation
+        const completedOvers = Math.floor(bowl.oversBowled);
+        const fractionalPart = (bowl.oversBowled % 1) * 10;
+        const currentBalls = Math.round(fractionalPart);
+        const totalBalls = completedOvers * ballsPerOver + currentBalls;
+
+        if (totalBalls > 0) {
+          const oversFraction = totalBalls / ballsPerOver;
+          const econ = bowl.runsConceded / oversFraction;
+          
           if (econ <= 4.0) pts += 20;
-          else if (econ <= 6.0) pts += 10;
-          else if (econ >= 12.0) pts -= 10; // penalty for getting smashed!
+          else if (econ <= 6.0) pts += 12;
+          else if (econ <= 8.0) pts += 6;
+          else if (econ >= 12.0) pts -= 10;
+          else if (econ >= 15.0) pts -= 18;
+
+          if (econ < 10.0) {
+            pts += oversFraction * 4.0;
+          }
+        }
+
+        // Importance of wickets: top order or high scoring dangerous batsmen
+        if (opponentBatsmen.length > 0) {
+          opponentBatsmen.forEach((opB, idx) => {
+            if (opB.dismissedBy === bowl.id) {
+              if (idx <= 2) {
+                pts += 10.0; // opener/top-order wicket
+                if (opB.runsScored >= 20) {
+                  pts += opB.runsScored * 0.15; // dangerous player key dismissal
+                }
+              } else {
+                pts += 4.0; // middle order or tail wicket
+              }
+            }
+          });
         }
 
         const originalTeam = getPlayerOriginalTeam(m, bowl);
@@ -199,9 +259,19 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       });
     };
 
-    calculatePointsForInning(m.firstInnings);
+    calculatePointsForInning(m.firstInnings, false);
     if (m.secondInnings) {
-      calculatePointsForInning(m.secondInnings);
+      calculatePointsForInning(m.secondInnings, true);
+    }
+
+    // Win Team Priority: normally MOM is given to winning team unless tie or extraordinary solo effort
+    const isTie = !m.winnerTeamId || m.winnerTeamId === 'tie' || firstInnsRuns === secondInnsRuns;
+    if (!isTie) {
+      playersMap.forEach((data) => {
+        if (data.team.id === m.winnerTeamId) {
+          data.points += 28.0; // Significant Win bonus
+        }
+      });
     }
 
     // Sort players map by points
@@ -829,8 +899,12 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       doc.setTextColor(80, 88, 112);
       doc.text(bw.maidens.toString(), margin + 460, innerY + 13.5, { align: 'right' });
       
-      // Economy highlighted green if < 8
-      const econVal = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled) : 0;
+      // Economy highlighted green if < 8 (calculated accurately based on partial overs)
+      const completedOvers = Math.floor(bw.oversBowled);
+      const fractionalPart = (bw.oversBowled % 1) * 10;
+      const currentBalls = Math.round(fractionalPart);
+      const totalBalls = completedOvers * (m.settings?.ballsPerOver || 6) + currentBalls;
+      const econVal = totalBalls > 0 ? (bw.runsConceded / (totalBalls / (m.settings?.ballsPerOver || 6))) : 0;
       const econStr = econVal.toFixed(1);
       if (econVal < 8) {
         doc.setFont("Helvetica", "bold");
@@ -1047,8 +1121,12 @@ export default function MatchHistory({ currentCompletedMatch, onNewMatch }: Matc
       doc.setTextColor(80, 88, 112);
       doc.text(bw.maidens.toString(), margin + 460, innerY5 + 13.5, { align: 'right' });
       
-      // Economy highlighted green if < 8
-      const econVal = bw.oversBowled > 0 ? (bw.runsConceded / bw.oversBowled) : 0;
+      // Economy highlighted green if < 8 (calculated accurately based on partial overs)
+      const completedOversB = Math.floor(bw.oversBowled);
+      const fractionalPartB = (bw.oversBowled % 1) * 10;
+      const currentBallsB = Math.round(fractionalPartB);
+      const totalBallsB = completedOversB * (m.settings?.ballsPerOver || 6) + currentBallsB;
+      const econVal = totalBallsB > 0 ? (bw.runsConceded / (totalBallsB / (m.settings?.ballsPerOver || 6))) : 0;
       const econStr = econVal.toFixed(1);
       if (econVal < 8) {
         doc.setFont("Helvetica", "bold");

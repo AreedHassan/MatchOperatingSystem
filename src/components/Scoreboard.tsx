@@ -715,6 +715,27 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
 
   // Real-time Win Probability Calculator
   const getWinProbability = () => {
+    const totalWicketsAllowed = match.isSuperOver 
+      ? (match.settings.playersPerTeam === 1 ? 1 : 2)
+      : (match.settings.playersPerTeam === 1 ? 1 : match.settings.playersPerTeam - 1);
+
+    const allBalls = inning.overs.flatMap(o => o.balls);
+    const last6Balls = allBalls.slice(-6);
+    const runsInLast6 = last6Balls.reduce((acc, b) => acc + b.runs + b.extras, 0);
+    const boundariesLast6 = last6Balls.filter(b => b.runs === 4 || b.runs === 6).length;
+    const wicketsLast6 = last6Balls.filter(b => b.isWicket).length;
+
+    // Check consecutive dot balls (runs === 0 and extras === 0 and not wicket)
+    let consecutiveDots = 0;
+    for (let i = allBalls.length - 1; i >= 0; i--) {
+      const b = allBalls[i];
+      if (b.runs === 0 && b.extras === 0 && !b.isWicket) {
+        consecutiveDots++;
+      } else {
+        break;
+      }
+    }
+
     if (!isInnings2) {
       // First innings rate-weight calculation
       const runs = inning.runs;
@@ -723,26 +744,47 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
       
       if (balls === 0) return { batting: 50, bowling: 50 };
       
+      const totalMatchBalls = totalOvers * ballsPerOver;
+      const ballsRemainingFirstInns = Math.max(0, totalMatchBalls - balls);
       const oversFraction = balls / ballsPerOver;
       const crr = runs / (oversFraction || 1);
       
-      // Gully base average run rate target: 7.5 runs/over
-      let score = 50 + (crr - 7.5) * 5 - (wickets * 4.5);
-      score = Math.min(92, Math.max(8, score));
+      // Compute projected score with momentum
+      const weightOfCurrent = Math.min(1.0, balls / totalMatchBalls);
+      const estimatedRrate = (crr * weightOfCurrent) + (7.5 * (1 - weightOfCurrent));
+      const projectedFinalScore = runs + (estimatedRrate * (ballsRemainingFirstInns / ballsPerOver));
+      
+      // Adjust projection for wicket resource loss
+      const wicketLossRatio = wickets / (totalWicketsAllowed || 1);
+      const adjustedProjectedScore = projectedFinalScore * (1 - wicketLossRatio * 0.18);
+      
+      // Predicted win chance relative to an average target (7.5 runs/over)
+      const standardBaseScore = totalOvers * 7.5;
+      let winChance = 50 + (adjustedProjectedScore - standardBaseScore) * 1.6;
+      
+      // Apply momentum metrics
+      if (runsInLast6 >= 12) winChance += 5;       // explosive scoring
+      if (boundariesLast6 >= 2) winChance += 4;   // boundary streak
+      if (wicketsLast6 > 0) winChance -= wicketsLast6 * 6; // recent wickets falls
+      if (consecutiveDots >= 3) winChance -= 4;    // pressure from dots
+      
+      // Shock factor: Last ball was a wicket
+      if (allBalls.length > 0 && allBalls[allBalls.length - 1].isWicket) {
+        winChance -= 8;
+      }
+
+      // Constrain first innings to remain competitive (10-90)
+      winChance = Math.min(90, Math.max(10, winChance));
       
       return {
-        batting: Math.round(score),
-        bowling: Math.round(100 - score)
+        batting: Math.round(winChance),
+        bowling: Math.round(100 - winChance)
       };
     } else {
       // Second innings chasing details
       const runs = inning.runs;
       const wickets = inning.wickets;
       const balls = inning.ballsBowled;
-      
-      const totalWicketsAllowed = match.isSuperOver 
-        ? (match.settings.playersPerTeam === 1 ? 1 : 2)
-        : (match.settings.playersPerTeam === 1 ? 1 : match.settings.playersPerTeam - 1);
       const wicketsRemaining = totalWicketsAllowed - wickets;
       
       if (remainingTarget <= 0) {
@@ -755,18 +797,59 @@ export default function Scoreboard({ match, onUpdateMatch, onGoToHistory, onRese
       const rrr = ballsRemaining > 0 ? (remainingTarget / (ballsRemaining / ballsPerOver)) : 999;
       const wktFraction = wicketsRemaining / (totalWicketsAllowed || 1);
       
-      // Required run rate score relative base of 7.0 rr
-      let score = 50 - (rrr - 7.0) * 8.5 + (wktFraction - 0.55) * 45;
+      // Chasing index balancing RRR pressure and wickets
+      const rrrDiff = rrr - 7.5;
+      const rrrPenalty = rrrDiff * 10.0; // steeper penalties for climbing required rate
+      const wicketBonus = (wktFraction - 0.5) * 48.0;
       
-      if (ballsRemaining < 12) {
-        // High tension multipliers
-        score += (wicketsRemaining >= 2 ? 8 : -8);
+      let winChance = 50 - rrrPenalty + wicketBonus;
+      
+      // Volatility at the Death (last 2 overs or 12 balls)
+      const totalMatchBalls = totalOvers * ballsPerOver;
+      const isDeathOvers = ballsRemaining <= Math.max(6, Math.min(12, totalMatchBalls * 0.3));
+      
+      if (isDeathOvers) {
+        // Double down on required runs. At the death, wickets have amplified importance or penalty
+        if (wicketsRemaining === 1) {
+          // extreme pressure on the last pair
+          winChance -= 15;
+        }
+        if (rrr > 14.0) {
+          winChance -= 10;
+        } else if (rrr < 6.0) {
+          winChance += 15;
+        }
       }
       
-      score = Math.min(99, Math.max(1, score));
+      // High-momentum events
+      if (runsInLast6 >= 14) winChance += 10;       // massive boundary charge
+      if (boundariesLast6 >= 2) winChance += 8;    // momentum to batting
+      if (consecutiveDots >= 2) winChance -= (consecutiveDots * 4); // dots pressure
+      if (wicketsLast6 > 0) winChance -= wicketsLast6 * 10; // multiple rapid dismissals
+      
+      // Instructive shock event: Last ball wicket, boundary or dot
+      if (allBalls.length > 0) {
+        const lastBall = allBalls[allBalls.length - 1];
+        if (lastBall.isWicket) {
+          winChance -= 18; // Massive swing on wicket fall
+        } else if (lastBall.runs === 4 || lastBall.runs === 6) {
+          winChance += 6; // Swing on boundary hit
+        } else if (lastBall.runs === 0 && lastBall.extras === 0) {
+          winChance -= 3; // Minor drop on dot ball
+        }
+      }
+
+      // Wide boundary boundaries for realistic climax representation
+      if (isDeathOvers && ballsRemaining <= 6) {
+        // Last over is highly volatile
+        winChance = Math.min(99, Math.max(1, winChance));
+      } else {
+        winChance = Math.min(96, Math.max(4, winChance));
+      }
+      
       return {
-        batting: Math.round(score),
-        bowling: Math.round(100 - score)
+        batting: Math.round(winChance),
+        bowling: Math.round(100 - winChance)
       };
     }
   };

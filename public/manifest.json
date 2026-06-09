@@ -36,34 +36,40 @@
   ],
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "https://matchoperatingsystem.vercel.app/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "https://matchoperatingsystem.vercel.app/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "https://matchoperatingsystem.vercel.app/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "https://matchoperatingsystem.vercel.app/icon.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg",
+      "purpose": "any"
     }
   ],
   "screenshots": [
     {
-      "src": "/screenshots/screen1.png",
+      "src": "https://matchoperatingsystem.vercel.app/screenshots/screen1.png",
       "sizes": "1920x1080",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Match Operating System Main Hub"
     },
     {
-      "src": "/screenshots/screen2.png",
+      "src": "https://matchoperatingsystem.vercel.app/screenshots/screen2.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
